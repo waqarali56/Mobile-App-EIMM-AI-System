@@ -1,0 +1,16 @@
+import 'package:get/get.dart';
+import '../Controllers/AuthController.dart';
+import '../ViewModels/AuthViewModel.dart';
+
+class AppBinding extends Bindings {
+  @override
+  void dependencies() {
+    // Controllers
+    Get.lazyPut<AuthController>(() => AuthController());
+    
+    // ViewModels
+    Get.lazyPut<AuthViewModel>(() => AuthViewModel());
+    
+    // TODO: Add other controllers and viewmodels as we create them
+  }
+}
