@@ -1,3 +1,5 @@
+// lib/Services/base_api_service.dart
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../Resources/api_client.dart';
 
@@ -36,14 +38,14 @@ abstract class BaseApiService extends GetxService {
 
   /// Clear authentication token
   void clearAuthToken() {
-    _apiClient.clearAuthToken();
+    _apiClient.clearAuthTokens();
   }
 
   /// Get current auth token
   String? get authToken => _apiClient.authToken;
 
   /// Check if user is authenticated
-  bool get isAuthenticated => authToken != null;
+  bool get isAuthenticated => authToken != null && authToken!.isNotEmpty;
 
   /// Handle loading state
   void startLoading() {
@@ -66,7 +68,7 @@ abstract class BaseApiService extends GetxService {
         message,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Get.theme.primaryColor,
-        colorText: Get.theme.colorScheme.onPrimary,
+        colorText: Colors.white,
       );
     }
   }
@@ -79,8 +81,8 @@ abstract class BaseApiService extends GetxService {
         'Error',
         message,
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Get.theme.colorScheme.error,
-        colorText: Get.theme.colorScheme.onError,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
     }
   }

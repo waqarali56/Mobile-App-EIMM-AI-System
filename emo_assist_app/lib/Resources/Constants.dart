@@ -198,4 +198,43 @@ class Constants {
   // ✅ App Constants
   static const String appName = 'EmoAssist';
   static const String appVersion = '1.0.0';
+
+
+
+
+    // OnBoarding pages data
+  static List<OnBoardingPageData> onBoardingPages = [
+    OnBoardingPageData(
+      title: "Emotional Intelligence",
+      description: "Detect emotions through text, voice, and facial expressions",
+        icon: Icons.emoji_emotions_outlined,
+        color: primaryColor,
+    ),
+    OnBoardingPageData(
+      title: "AI-Powered Support",
+      description: "Get empathetic responses from our intelligent AI companion",
+      icon: Icons.psychology_outlined,
+      color: primaryColor,
+    ),
+    OnBoardingPageData(
+      title: "Multi-Modal Analysis",
+      description: "Combine text sentiment, voice tone, and facial cues for accurate emotion detection",
+      icon: Icons.insights_outlined,
+      color: secondaryColor,
+    ),
+  ];
+}
+
+class OnBoardingPageData {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+
+  OnBoardingPageData({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+  });
 }

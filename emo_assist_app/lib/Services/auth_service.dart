@@ -1,47 +1,36 @@
+// lib/Services/auth_service.dart
+import 'package:emo_assist_app/Services/base_api_service.dart';
 import '../Resources/api_client.dart';
-import '../Models/User.dart';
+import '../Resources/api_routes.dart';
 
-class AuthService {
-  final ApiClient _apiClient = ApiClient();
-
-  Future<ApiResponse<User>> login(String email, String password) async {
-    final response = await _apiClient.login(email, password);
-
-    if (response.success && response.data != null) {
-      final user = User.fromJson(response.data!);
-
-      // Store token if available
-      if (response.rawResponse?['token'] != null) {
-        _apiClient.setAuthToken(response.rawResponse!['token']);
-      }
-
-      return ApiResponse.success(user);
-    } else {
-      return ApiResponse.error(response.message ?? 'Login failed');
-    }
+class AuthService extends BaseApiService {
+  
+  Future<ApiResponse<Map<String, dynamic>>> login(String email, String password) async {
+    return apiClient.login(email, password);
   }
 
-  Future<ApiResponse<User>> signup(Map<String, dynamic> userData) async {
-    final response = await _apiClient.register(userData);
-
-    if (response.success && response.data != null) {
-      final user = User.fromJson(response.data!);
-      return ApiResponse.success(user);
-    } else {
-      return ApiResponse.error(response.message ?? 'Signup failed');
-    }
+  // FIXED: Changed from signup to register
+  Future<ApiResponse<Map<String, dynamic>>> register(Map<String, dynamic> userData) async {
+    return apiClient.register(userData);
   }
 
-  Future<ApiResponse<bool>> logout() async {
-    _apiClient.clearAuthToken();
-    // TODO: Clear local storage
-    return ApiResponse.success(true);
+  Future<ApiResponse<Map<String, dynamic>>> logout() async {
+    return apiClient.logout();
   }
 
-  Future<ApiResponse<bool>> changePassword(
-    Map<String, dynamic> passwordData,
-  ) async {
-    final response = await _apiClient.changePassword(passwordData);
-    return ApiResponse.success(response.success);
+  Future<ApiResponse<Map<String, dynamic>>> changePassword(Map<String, dynamic> passwordData) async {
+    return apiClient.changePassword(passwordData);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> googleOAuthInitiate() async {
+    return apiClient.googleOAuthInitiate();
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> googleOAuthCallback(String code, String state) async {
+    return apiClient.googleOAuthCallback(code, state);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> refreshToken() async {
+    return apiClient.refreshAccessToken(); // Note: This was renamed in ApiClient
   }
 }

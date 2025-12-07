@@ -1,7 +1,8 @@
+// lib/Resources/api_client.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'api-routes.dart';
+import 'api_routes.dart';
 import 'app_config.dart';
 
 /// Custom exception for API errors
@@ -57,6 +58,21 @@ class ApiResponse<T> {
       rawResponse: rawResponse,
     );
   }
+
+  factory ApiResponse.fromJson(Map<String, dynamic> json) {
+    final success = json['success'] ?? false;
+    final data = json['data'];
+    final message = json['message'];
+    final statusCode = json['statusCode'];
+
+    return ApiResponse(
+      success: success,
+      data: data,
+      message: message,
+      statusCode: statusCode,
+      rawResponse: json,
+    );
+  }
 }
 
 /// Centralized HTTP client for all API operations
@@ -67,6 +83,8 @@ class ApiClient {
 
   final http.Client _client = http.Client();
   String? _authToken;
+  String? _refreshToken;
+  
   Map<String, String> _defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -78,14 +96,23 @@ class ApiClient {
     _defaultHeaders['Authorization'] = 'Bearer $token';
   }
 
-  /// Clear authentication token
-  void clearAuthToken() {
+  /// Set refresh token
+  void setRefreshToken(String token) {
+    _refreshToken = token;
+  }
+
+  /// Clear authentication tokens
+  void clearAuthTokens() {  // Fixed: clearAuthTokenS (plural)
     _authToken = null;
+    _refreshToken = null;
     _defaultHeaders.remove('Authorization');
   }
 
   /// Get current auth token
   String? get authToken => _authToken;
+  
+  /// Get current refresh token
+  String? get refreshToken => _refreshToken;  // Fixed: Only one getter
 
   /// Set custom headers
   void setCustomHeaders(Map<String, String> headers) {
@@ -101,7 +128,7 @@ class ApiClient {
     return headers;
   }
 
-  /// Handle HTTP response
+  /// Handle HTTP response with backend format
   ApiResponse<T> _handleResponse<T>(
     http.Response response,
     T Function(Map<String, dynamic>)? fromJson,
@@ -112,30 +139,67 @@ class ApiClient {
       final responseBody = response.body.isEmpty ? '{}' : response.body;
       final Map<String, dynamic> jsonResponse = json.decode(responseBody);
 
+      // Handle your backend response format
       if (statusCode >= 200 && statusCode < 300) {
-        // Success response
-        if (fromJson != null) {
-          final data = fromJson(jsonResponse);
-          return ApiResponse.success(
-            data,
+        // Check if response has success property (your backend format)
+        final success = jsonResponse['success'] ?? true;
+        
+        if (!success) {
+          final errorMessage = jsonResponse['message'] ?? 
+                              jsonResponse['error'] ?? 
+                              'Operation failed';
+          return ApiResponse.error(
+            errorMessage,
             statusCode: statusCode,
             rawResponse: jsonResponse,
           );
+        }
+
+        // Success response
+        final responseData = jsonResponse['data'] ?? jsonResponse;
+        
+        if (fromJson != null && responseData != null) {
+          try {
+            final data = fromJson(responseData);
+            return ApiResponse.success(
+              data,
+              statusCode: statusCode,
+              rawResponse: jsonResponse,
+            );
+          } catch (e) {
+            return ApiResponse.error(
+              'Failed to parse response data: $e',
+              statusCode: statusCode,
+              rawResponse: jsonResponse,
+            );
+          }
         } else {
           return ApiResponse.success(
-            jsonResponse as T,
+            responseData as T,
             statusCode: statusCode,
             rawResponse: jsonResponse,
           );
         }
       } else {
         // Error response
-        final errorMessage =
-            jsonResponse['message'] ??
-            jsonResponse['error'] ??
-            'HTTP Error $statusCode';
+        final errorMessage = jsonResponse['message'] ??
+                            jsonResponse['error'] ??
+                            jsonResponse['title'] ??
+                            'HTTP Error $statusCode';
+        
+        // Extract validation errors if present
+        String detailedMessage = errorMessage;
+        if (jsonResponse['errors'] != null) {
+          final errors = jsonResponse['errors'];
+          if (errors is Map) {
+            detailedMessage += '\n${errors.entries.map((e) => '${e.key}: ${e.value}').join('\n')}';
+          } else if (errors is List) {
+            detailedMessage += '\n${errors.join('\n')}';
+          }
+        }
+        
         return ApiResponse.error(
-          errorMessage,
+          detailedMessage,
           statusCode: statusCode,
           rawResponse: jsonResponse,
         );
@@ -190,6 +254,10 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse(endpoint);
+      
+      print('POST Request to: $uri');
+      print('Request Body: ${json.encode(body)}');
+      
       final response = await _client
           .post(
             uri,
@@ -197,6 +265,9 @@ class ApiClient {
             body: body != null ? json.encode(body) : null,
           )
           .timeout(timeout ?? AppConfig.defaultTimeout);
+
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
 
       return _handleResponse<T>(response, fromJson);
     } on SocketException {
@@ -295,78 +366,36 @@ class ApiClient {
     }
   }
 
-  /// Upload file with multipart request
-  Future<ApiResponse<T>> uploadFile<T>(
-    String endpoint,
-    String filePath,
-    String fieldName, {
-    Map<String, String>? fields,
-    Map<String, String>? headers,
-    T Function(Map<String, dynamic>)? fromJson,
-    Duration? timeout,
-  }) async {
-    try {
-      final uri = Uri.parse(endpoint);
-      final request = http.MultipartRequest('POST', uri);
-
-      // Add headers
-      request.headers.addAll(_getHeaders(headers));
-
-      // Add file
-      final file = await http.MultipartFile.fromPath(fieldName, filePath);
-      request.files.add(file);
-
-      // Add fields
-      if (fields != null) {
-        request.fields.addAll(fields);
-      }
-
-      final streamedResponse = await request.send().timeout(
-        timeout ?? AppConfig.uploadTimeout,
-      );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      return _handleResponse<T>(response, fromJson);
-    } on SocketException {
-      return ApiResponse.error('No internet connection');
-    } on HttpException catch (e) {
-      return ApiResponse.error('HTTP error: ${e.message}');
-    } on FormatException {
-      return ApiResponse.error('Invalid response format');
-    } catch (e) {
-      return ApiResponse.error('Unexpected error: $e');
+  /// Refresh access token
+  Future<ApiResponse<Map<String, dynamic>>> refreshAccessToken() async {  // Renamed to avoid conflict
+    if (_refreshToken == null || _authToken == null) {
+      return ApiResponse.error('No refresh token available');
     }
-  }
 
-  /// Download file
-  Future<ApiResponse<List<int>>> downloadFile(
-    String endpoint, {
-    Map<String, String>? headers,
-    Duration? timeout,
-  }) async {
     try {
-      final uri = Uri.parse(endpoint);
-      final response = await _client
-          .get(uri, headers: _getHeaders(headers))
-          .timeout(timeout ?? AppConfig.downloadTimeout);
+      final response = await post<Map<String, dynamic>>(
+        API.refreshToken,
+        body: {
+          'accessToken': _authToken,
+          'refreshToken': _refreshToken,
+        },
+      );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return ApiResponse.success(
-          response.bodyBytes,
-          statusCode: response.statusCode,
-        );
-      } else {
-        return ApiResponse.error(
-          'Failed to download file',
-          statusCode: response.statusCode,
-        );
+      if (response.success && response.data != null) {
+        final newAccessToken = response.data!['accessToken'];
+        final newRefreshToken = response.data!['refreshToken'];
+        
+        if (newAccessToken != null) {
+          setAuthToken(newAccessToken);
+        }
+        if (newRefreshToken != null) {
+          setRefreshToken(newRefreshToken);
+        }
       }
-    } on SocketException {
-      return ApiResponse.error('No internet connection');
-    } on HttpException catch (e) {
-      return ApiResponse.error('HTTP error: ${e.message}');
+
+      return response;
     } catch (e) {
-      return ApiResponse.error('Unexpected error: $e');
+      return ApiResponse.error('Token refresh failed: $e');
     }
   }
 
@@ -374,7 +403,7 @@ class ApiClient {
   Future<bool> checkConnectivity() async {
     try {
       final response = await _client
-          .get(Uri.parse(API.baseUrl))
+          .get(Uri.parse(API.healthCheck))
           .timeout(const Duration(seconds: 10));
       return response.statusCode == 200;
     } catch (e) {
@@ -390,7 +419,7 @@ class ApiClient {
 
 /// Extension methods for common API operations
 extension ApiClientExtensions on ApiClient {
-  // Auth operations
+  // Auth operations matching your backend
   Future<ApiResponse<Map<String, dynamic>>> login(
     String email,
     String password,
@@ -407,11 +436,31 @@ extension ApiClientExtensions on ApiClient {
     return post<Map<String, dynamic>>(API.register, body: userData);
   }
 
+  Future<ApiResponse<Map<String, dynamic>>> googleOAuthInitiate() {
+    return get<Map<String, dynamic>>(API.googleOAuth);
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> googleOAuthCallback(
+    String code,
+    String state,
+  ) {
+    return get<Map<String, dynamic>>(
+      API.googleOAuthCallback,
+      queryParameters: {'code': code, 'state': state},
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> logout() {
+    return post<Map<String, dynamic>>(API.logout);
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> changePassword(
     Map<String, dynamic> passwordData,
   ) {
     return post<Map<String, dynamic>>(API.changePassword, body: passwordData);
   }
 
-  
+  Future<ApiResponse<Map<String, dynamic>>> healthCheck() {
+    return get<Map<String, dynamic>>(API.healthCheck);
+  }
 }

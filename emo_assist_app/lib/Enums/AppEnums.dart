@@ -5,6 +5,11 @@ enum AuthStatus {
   error,
 }
 
+enum UserType {
+  guest,
+  free,
+  premium, user,
+}
 enum EmotionType {
   happy,
   sad,

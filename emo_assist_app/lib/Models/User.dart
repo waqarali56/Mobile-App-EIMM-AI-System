@@ -1,32 +1,50 @@
+// lib/Models/User.dart
+import 'package:emo_assist_app/Enums/AppEnums.dart';
+
 class User {
   final String id;
   final String email;
-  final String? name;
+  final String name;
+  final UserType type;
+  final DateTime? createdAt;
+  final String? phoneNumber;
   final String? profileImage;
-  final UserTier tier;
-  final DateTime createdAt;
-  final DateTime? lastLogin;
 
   User({
     required this.id,
     required this.email,
-    this.name,
+    required this.name,
+    required this.type,
+    this.createdAt,
+    this.phoneNumber,
     this.profileImage,
-    this.tier = UserTier.guest,
-    required this.createdAt,
-    this.lastLogin,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] ?? '',
+      id: json['id'] ?? json['userId'] ?? '',
       email: json['email'] ?? '',
-      name: json['name'],
-      profileImage: json['profileImage'],
-      tier: _parseUserTier(json['tier']),
-      createdAt: DateTime.parse(json['createdAt']),
-      lastLogin: json['lastLogin'] != null ? DateTime.parse(json['lastLogin']) : null,
+      name: json['name'] ?? json['fullName'] ?? json['username'] ?? 'User',
+      type: _parseUserType(json['userType'] ?? json['role']),
+      createdAt: json['createdAt'] != null 
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      phoneNumber: json['phoneNumber']?.toString(),
+      profileImage: json['profileImage']?.toString(),
     );
+  }
+
+  static UserType _parseUserType(dynamic type) {
+    if (type == null) return UserType.free;
+    
+    final typeStr = type.toString().toLowerCase();
+    
+    if (typeStr.contains('premium')) return UserType.premium;
+    if (typeStr.contains('admin')) return UserType.premium;
+    if (typeStr.contains('free')) return UserType.free;
+    if (typeStr.contains('guest')) return UserType.guest;
+    
+    return UserType.free;
   }
 
   Map<String, dynamic> toJson() {
@@ -34,27 +52,15 @@ class User {
       'id': id,
       'email': email,
       'name': name,
+      'type': type.index,
+      'createdAt': createdAt?.toIso8601String(),
+      'phoneNumber': phoneNumber,
       'profileImage': profileImage,
-      'tier': tier.name,
-      'createdAt': createdAt.toIso8601String(),
-      'lastLogin': lastLogin?.toIso8601String(),
     };
   }
 
-  static UserTier _parseUserTier(String tier) {
-    switch (tier) {
-      case 'premium':
-        return UserTier.premium;
-      case 'free':
-        return UserTier.free;
-      default:
-        return UserTier.guest;
-    }
-  }
-}
-
-enum UserTier {
-  guest,
-  free,
-  premium,
+  bool get isPremium => type == UserType.premium;
+  bool get isGuest => type == UserType.guest;
+  
+  // User doesn't need to know about tokens
 }

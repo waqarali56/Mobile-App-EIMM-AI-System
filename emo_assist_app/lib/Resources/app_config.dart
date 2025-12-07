@@ -1,24 +1,24 @@
+// lib/Resources/app_config.dart
 /// Environment configuration for API endpoints
 enum Environment { development, production }
 
 class AppConfig {
-  static const Environment _currentEnvironment =
-      Environment.development; // Change this to switch environments
+  static const Environment _currentEnvironment = Environment.development;
 
   static Environment get currentEnvironment => _currentEnvironment;
 
   static String get baseUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'https://localhost:65201/api'; // Removed extra slash
+        // Use your actual backend URL from the logs
+        return 'http://192.168.0.104:5104/api/v1';  // HTTPS endpoint from your logs
       case Environment.production:
-        return 'https://domain/api'; // Production server
+        return 'https://your-production-domain/api/v1';
     }
   }
 
   static bool get isProduction => _currentEnvironment == Environment.production;
-  static bool get isDevelopment =>
-      _currentEnvironment == Environment.development;
+  static bool get isDevelopment => _currentEnvironment == Environment.development;
 
   // API Configuration
   static const Duration defaultTimeout = Duration(seconds: 30);
