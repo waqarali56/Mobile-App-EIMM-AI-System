@@ -1,4 +1,5 @@
 // lib/Views/Signin/SigninScreen.dart
+import 'package:emo_assist_app/Services/navigation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
@@ -49,9 +50,9 @@ class SigninScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 50),
-                
+
                 // Login Form
                 Column(
                   children: [
@@ -69,7 +70,10 @@ class SigninScreen extends StatelessWidget {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.error_outline, color: Colors.red),
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.red,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -86,72 +90,79 @@ class SigninScreen extends StatelessWidget {
                       }
                       return const SizedBox.shrink();
                     }),
-                    
+
                     // Email Field
-                    Obx(() => TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'Enter your email',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        errorText: viewModel.emailError.value.isEmpty
-                            ? null
-                            : viewModel.emailError.value,
-                      ),
-                      onChanged: (value) {
-                        viewModel.email.value = value;
-                        viewModel.validateEmail();
-                      },
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next, // Better UX
-                    )),
-                    const SizedBox(height: 16),
-                    
-                    // Password Field with Toggle Visibility
-                    Obx(() => TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        hintText: 'Enter your password',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            viewModel.obscurePassword.value 
-                                ? Icons.visibility_off 
-                                : Icons.visibility,
-                            color: Colors.grey,
+                    Obx(
+                      () => TextFormField(
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'Enter your email',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          onPressed: () => viewModel.togglePasswordVisibility(),
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          errorText: viewModel.emailError.value.isEmpty
+                              ? null
+                              : viewModel.emailError.value,
                         ),
-                        errorText: viewModel.passwordError.value.isEmpty
-                            ? null
-                            : viewModel.passwordError.value,
+                        onChanged: (value) {
+                          viewModel.email.value = value;
+                          viewModel.validateEmail();
+                        },
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next, // Better UX
                       ),
-                      onChanged: (value) {
-                        viewModel.password.value = value;
-                        viewModel.validatePassword();
-                      },
-                      obscureText: viewModel.obscurePassword.value,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => viewModel.login(),
-                    )),
+                    ),
                     const SizedBox(height: 16),
-                    
+
+                    // Password Field with Toggle Visibility
+                    Obx(
+                      () => TextFormField(
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          hintText: 'Enter your password',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              viewModel.obscurePassword.value
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () =>
+                                viewModel.togglePasswordVisibility(),
+                          ),
+                          errorText: viewModel.passwordError.value.isEmpty
+                              ? null
+                              : viewModel.passwordError.value,
+                        ),
+                        onChanged: (value) {
+                          viewModel.password.value = value;
+                          viewModel.validatePassword();
+                        },
+                        obscureText: viewModel.obscurePassword.value,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => viewModel.login(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // Remember Me & Forgot Password
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
-                            Obx(() => Checkbox(
-                              value: viewModel.rememberMe.value,
-                              onChanged: (v) => viewModel.toggleRememberMe(),
-                              activeColor: Constants.primaryColor,
-                            )),
+                            Obx(
+                              () => Checkbox(
+                                value: viewModel.rememberMe.value,
+                                onChanged: (v) => viewModel.toggleRememberMe(),
+                                activeColor: Constants.primaryColor,
+                              ),
+                            ),
                             Text("Remember me", style: Constants.bodyMedium),
                           ],
                         ),
@@ -168,38 +179,40 @@ class SigninScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 30),
-                    
+
                     // Sign In Button
-                    Obx(() => SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: viewModel.isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Constants.primaryColor,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                    Obx(
+                      () => SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: viewModel.isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Constants.primaryColor,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  elevation: 0,
                                 ),
-                                elevation: 0,
+                                onPressed: viewModel.canLogin
+                                    ? () async {
+                                        // Hide keyboard when button is pressed
+                                        FocusScope.of(context).unfocus();
+                                        await viewModel.login();
+                                      }
+                                    : null,
+                                child: const Text(
+                                  'Sign In',
+                                  style: TextStyle(fontSize: 16),
+                                ),
                               ),
-                              onPressed: viewModel.canLogin
-                                  ? () async {
-                                      // Hide keyboard when button is pressed
-                                      FocusScope.of(context).unfocus();
-                                      await viewModel.login();
-                                    }
-                                  : null,
-                              child: const Text(
-                                'Sign In',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                            ),
-                    )),
-                    
+                      ),
+                    ),
+
                     const SizedBox(height: 20),
-                    
+
                     // Divider
                     Row(
                       children: [
@@ -214,9 +227,9 @@ class SigninScreen extends StatelessWidget {
                         const Expanded(child: Divider()),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 20),
-                    
+
                     // Guest Login
                     SizedBox(
                       width: double.infinity,
@@ -238,9 +251,9 @@ class SigninScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 30),
-                    
+
                     // Sign Up Link
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -277,7 +290,7 @@ class SigninScreen extends StatelessWidget {
     try {
       final storageService = StorageService();
       await storageService.setGuest(true);
-      Get.offAllNamed('/chat');
+      NavigationService.goToHome();
     } catch (e) {
       Get.snackbar(
         'Error',

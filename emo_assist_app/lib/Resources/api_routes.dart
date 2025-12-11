@@ -14,6 +14,20 @@ class API {
   static String get refreshToken => '$authBase/refresh-token';
   static String get changePassword => '$authBase/change-password';
   static String get healthCheck => '$authBase/health-check';
+
+
+
+
+ // OTP endpoints
+  static String get sendOTP => '$authBase/send-otp';
+  static String get verifyOTP => '$authBase/verify-otp';
+  static String get resendOTP => '$authBase/resend-otp';
+  static String get sendPasswordResetOTP => '$authBase/send-password-reset-otp';
+  static String get resetPasswordWithOTP => '$authBase/reset-password-with-otp';
+  static String get checkEmailVerified => '$authBase/check-email-verified';
+
+
+
   
   // User management (admin only)
   static String get users => '$authBase/users';

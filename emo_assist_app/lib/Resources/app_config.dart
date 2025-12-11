@@ -11,7 +11,7 @@ class AppConfig {
     switch (_currentEnvironment) {
       case Environment.development:
         // Use your actual backend URL from the logs
-        return 'http://192.168.0.104:5104/api/v1';  // HTTPS endpoint from your logs
+        return 'http://192.168.36.28:5104/api/v1';  // HTTPS endpoint from your logs
       case Environment.production:
         return 'https://your-production-domain/api/v1';
     }

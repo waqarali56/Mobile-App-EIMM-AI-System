@@ -25,3 +25,11 @@ enum ChatMessageType {
   bot,
   system,
 }
+
+
+enum AppStatus {
+  initial,
+  loading,
+  success,
+  error,
+}

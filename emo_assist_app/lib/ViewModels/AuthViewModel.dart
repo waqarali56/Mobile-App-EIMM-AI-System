@@ -1,30 +1,34 @@
-// lib/ViewModels/AuthViewModel.dart
-import 'dart:developer'; // Add this import for logging
+// ViewModels/AuthViewModel.dart
+import 'dart:developer';
 import 'package:emo_assist_app/Enums/AppEnums.dart';
+import 'package:emo_assist_app/Models/OTP.dart';
 import 'package:emo_assist_app/Models/User.dart';
-import 'package:emo_assist_app/Resources/app_routes.dart';
 import 'package:emo_assist_app/Services/auth_service.dart';
+import 'package:emo_assist_app/Services/navigation_service.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthViewModel extends GetxController {
-  final AuthService _authService = AuthService();
-  
+  final AuthService _authService = Get.find<AuthService>();
+
   // Form fields
   final RxString email = ''.obs;
   final RxString password = ''.obs;
   final RxString confirmPassword = ''.obs;
-  final RxString name = ''.obs;
-  
+  final RxString firstName = ''.obs;
+  final RxString lastName = ''.obs;
+
   // Password visibility
   final RxBool obscurePassword = true.obs;
   final RxBool obscureConfirmPassword = true.obs;
-  
+
   // Validation errors
   final RxString emailError = ''.obs;
   final RxString passwordError = ''.obs;
   final RxString confirmPasswordError = ''.obs;
-  final RxString nameError = ''.obs;
-  
+  final RxString firstNameError = ''.obs;
+  final RxString lastNameError = ''.obs;
+
   // App state
   final Rx<AuthStatus> status = AuthStatus.initial.obs;
   final Rx<User?> currentUser = Rx<User?>(null);
@@ -33,15 +37,32 @@ class AuthViewModel extends GetxController {
   final RxBool agreeToTerms = false.obs;
 
   // Validation getters
-  bool get isValidEmail => RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email.value);
+  bool get isValidEmail =>
+      RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email.value);
   bool get isValidPassword => password.value.length >= 6;
   bool get isValidConfirmPassword => password.value == confirmPassword.value;
-  bool get isValidName => name.value.trim().length >= 2;
-  
-  bool get canLogin => isValidEmail && isValidPassword && emailError.isEmpty && passwordError.isEmpty;
-  bool get canSignup => canLogin && isValidConfirmPassword && isValidName && agreeToTerms.value;
-  
+  bool get isValidFirstName => firstName.value.trim().length >= 2;
+  bool get isValidLastName => lastName.value.trim().length >= 2;
+
+  bool get canLogin =>
+      isValidEmail &&
+      isValidPassword &&
+      emailError.isEmpty &&
+      passwordError.isEmpty;
+  bool get canSignup =>
+      canLogin &&
+      isValidConfirmPassword &&
+      isValidFirstName &&
+      isValidLastName &&
+      agreeToTerms.value;
   bool get isLoading => status.value == AuthStatus.loading;
+
+  @override
+  void onInit() {
+    super.onInit();
+    // Check for saved session
+    checkSavedSession();
+  }
 
   // Password visibility methods
   void togglePasswordVisibility() {
@@ -87,252 +108,404 @@ class AuthViewModel extends GetxController {
     }
   }
 
-  void validateName() {
-    if (name.value.isEmpty) {
-      nameError.value = 'Name is required';
-    } else if (!isValidName) {
-      nameError.value = 'Name must be at least 2 characters';
+  void validateFirstName() {
+    if (firstName.value.isEmpty) {
+      firstNameError.value = 'First name is required';
+    } else if (!isValidFirstName) {
+      firstNameError.value = 'First name must be at least 2 characters';
     } else {
-      nameError.value = '';
+      firstNameError.value = '';
     }
   }
 
-  // Actions
+  void validateLastName() {
+    if (lastName.value.isEmpty) {
+      lastNameError.value = 'Last name is required';
+    } else if (!isValidLastName) {
+      lastNameError.value = 'Last name must be at least 2 characters';
+    } else {
+      lastNameError.value = '';
+    }
+  }
+
+  // Login with OTP verification check
   Future<void> login() async {
     try {
       log('📱 [AuthViewModel] login() started', name: 'Auth');
-      log('📱 Email: ${email.value}', name: 'Auth');
-      log('📱 Password length: ${password.value.length}', name: 'Auth');
-      
+
       validateEmail();
       validatePassword();
-      
+
       if (!canLogin) {
         log('❌ [AuthViewModel] Validation failed', name: 'Auth');
         return;
       }
-      
+
       status.value = AuthStatus.loading;
       errorMessage.value = '';
-      
-      log('📱 [AuthViewModel] Calling _authService.login()', name: 'Auth');
-      
-      final stopwatch = Stopwatch()..start();
-      final response = await _authService.login(email.value.trim(), password.value);
-      stopwatch.stop();
-      
-      log('📱 [AuthViewModel] Response received after ${stopwatch.elapsedMilliseconds}ms', name: 'Auth');
-      log('📱 [AuthViewModel] Response success: ${response.success}', name: 'Auth');
-      log('📱 [AuthViewModel] Response status code: ${response.statusCode}', name: 'Auth');
-      log('📱 [AuthViewModel] Response message: ${response.message}', name: 'Auth');
-      log('📱 [AuthViewModel] Response data type: ${response.data.runtimeType}', name: 'Auth');
-      
-      if (response.data != null) {
-        log('📱 [AuthViewModel] Response data keys: ${response.data!.keys}', name: 'Auth');
-      }
-      
+
+      // Proceed with login if email is verified
+      final response = await _authService.login(
+        email.value.trim(),
+        password.value,
+      );
+
+      log(
+        '📱 [AuthViewModel] Response success: ${response.success}',
+        name: 'Auth',
+      );
+
       if (response.success) {
         final userData = response.data;
         if (userData != null && userData is Map<String, dynamic>) {
           log('📱 [AuthViewModel] Parsing user data', name: 'Auth');
-          
-          // Log the entire response to see structure
-          log('📱 [AuthViewModel] Full response: $userData', name: 'Auth');
-          
-          // IMPORTANT: Your backend returns different field names!
-          // According to your API response:
-          // - "userName" not "email"
-          // - "user" object contains user details
-          
-          // Check if response has "user" object
-          if (userData.containsKey('user')) {
-            final userResponse = userData['user'] as Map<String, dynamic>;
-            log('📱 [AuthViewModel] User object: $userResponse', name: 'Auth');
-            
-            // Your API returns "userName" but User model expects "email"
-            // You need to update your User model or create mapping
-            
-            // Create user object with your API response structure
-            currentUser.value = User(
-              id: userResponse['id']?.toString() ?? '',
-              email: userResponse['userName']?.toString() ?? userResponse['email']?.toString() ?? '',
-              name: userResponse['firstName']?.toString() ?? userResponse['lastName']?.toString() ?? '',
-              type: UserType.user,
+
+          User? user = _parseUserFromResponse(userData);
+
+          if (user != null) {
+            currentUser.value = user;
+
+            final accessToken = userData['accessToken'];
+            if (accessToken != null && accessToken is String) {
+              _authService.setAuthToken(accessToken);
+
+              if (rememberMe.value) {
+                await _saveUserSession(user, accessToken);
+              }
+            }
+
+            status.value = AuthStatus.success;
+
+            log(
+              '📱 [AuthViewModel] Login successful, navigating to chat',
+              name: 'Auth',
             );
+            NavigationService.goToHome();
+            Get.snackbar('Success', 'Login successful!');
           } else {
-            currentUser.value = User(
-              id: userData['id']?.toString() ?? '',
-              email: userData['userName']?.toString() ?? userData['email']?.toString() ?? '',
-              name: userData['firstName']?.toString() ?? userData['lastName']?.toString() ?? '',
-              type: UserType.user,
-            );
-            
+            _handleInvalidResponse();
           }
-          
-          // Store tokens if available
-          final accessToken = userData['accessToken'];
-          final refreshToken = userData['refreshToken'];
-          
-          log('📱 [AuthViewModel] Access token: ${accessToken != null ? "Present" : "Missing"}', name: 'Auth');
-          log('📱 [AuthViewModel] Refresh token: ${refreshToken != null ? "Present" : "Missing"}', name: 'Auth');
-          
-          if (accessToken != null && accessToken is String) {
-            // Store token in service
-            _authService.setAuthToken(accessToken);
-            log('📱 [AuthViewModel] Token stored successfully', name: 'Auth');
-          }
-          
-          status.value = AuthStatus.success;
-          
-          if (rememberMe.value) {
-            // TODO: Store user session securely
-            log('📱 [AuthViewModel] Remember me enabled', name: 'Auth');
-          }
-          
-          log('📱 [AuthViewModel] Login successful, navigating to chat', name: 'Auth');
-          AppRoutes.goToChat();
-          Get.snackbar('Success', 'Login successful!');
         } else {
-          log('❌ [AuthViewModel] Invalid response format: $userData', name: 'Auth');
-          errorMessage.value = 'Invalid response format from server';
-          status.value = AuthStatus.error;
-          Get.snackbar('Error', errorMessage.value);
+          _handleInvalidResponse();
         }
       } else {
-        log('❌ [AuthViewModel] Login failed: ${response.message}', name: 'Auth');
-        errorMessage.value = response.message ?? 'Login failed. Please check your credentials.';
-        status.value = AuthStatus.error;
-        Get.snackbar('Error', errorMessage.value);
+        _handleLoginError(response.message);
       }
     } catch (e, stackTrace) {
-      log('🔥 [AuthViewModel] Exception in login(): $e', name: 'Auth');
-      log('🔥 [AuthViewModel] Stack trace: $stackTrace', name: 'Auth');
-      
-      errorMessage.value = 'Connection error: ${e.toString()}';
-      status.value = AuthStatus.error;
-      Get.snackbar('Error', errorMessage.value);
+      _handleException('login', e, stackTrace);
     } finally {
       log('📱 [AuthViewModel] login() completed', name: 'Auth');
     }
   }
 
+  // Signup with automatic OTP sending
   Future<void> signup() async {
     try {
       log('📱 [AuthViewModel] signup() started', name: 'Auth');
-      
+
       validateEmail();
       validatePassword();
       validateConfirmPassword();
-      validateName();
-      
+      validateFirstName();
+      validateLastName();
+
       if (!canSignup) {
         log('❌ [AuthViewModel] Signup validation failed', name: 'Auth');
         return;
       }
-      
+
       status.value = AuthStatus.loading;
       errorMessage.value = '';
 
-      // IMPORTANT: Your API expects "userName" not "email"!
       final userData = {
-        'userName': email.value.trim(), // Changed from 'email' to 'userName'
+        'firstName': firstName.value.trim(),
+        'lastName': lastName.value.trim(),
+        'email': email.value.trim(),
         'password': password.value,
-        'name': name.value.trim(),
-        'email': email.value.trim(), // You might want to send both
+        'role': "User",
       };
-      
+
       log('📱 [AuthViewModel] Sending signup data: $userData', name: 'Auth');
-      
+
       final response = await _authService.register(userData);
-      
-      log('📱 [AuthViewModel] Signup response success: ${response.success}', name: 'Auth');
-      log('📱 [AuthViewModel] Signup response: ${response.data}', name: 'Auth');
-      
-      if (response.success) {
-        final userData = response.data;
-        if (userData != null && userData is Map<String, dynamic>) {
-          log('📱 [AuthViewModel] Signup successful, parsing user data', name: 'Auth');
-          
-          // Parse user data from response
-          currentUser.value = User(
-            id: userData['id']?.toString() ?? '',
-            email: userData['userName']?.toString() ?? userData['email']?.toString() ?? '',
-            name: userData['firstName']?.toString() ?? userData['lastName']?.toString() ?? userData['name']?.toString() ?? '',
-            type: UserType.user,
-          );
-          
-          // Store tokens if available
-          final accessToken = userData['accessToken'];
-          final refreshToken = userData['refreshToken'];
-          
-          if (accessToken != null && accessToken is String) {
-            _authService.setAuthToken(accessToken);
-            log('📱 [AuthViewModel] Token stored after signup', name: 'Auth');
-          }
-          
-          status.value = AuthStatus.success;
-          log('📱 [AuthViewModel] Signup successful, navigating to chat', name: 'Auth');
-          AppRoutes.goToChat();
-          Get.snackbar('Success', 'Signup successful!');
-        } else {
-          errorMessage.value = 'Invalid response format';
-          status.value = AuthStatus.error;
-          Get.snackbar('Error', errorMessage.value);
-        }
-      } else {
-        errorMessage.value = response.message ?? 'Signup failed';
-        status.value = AuthStatus.error;
-        Get.snackbar('Error', errorMessage.value);
+
+      log(
+        '📱 [AuthViewModel] Signup response success: ${response.success}',
+        name: 'Auth',
+      );
+
+     // In AuthViewModel.dart - signup method
+if (response.success) {
+  final responseData = response.data;
+  if (responseData != null && responseData is Map<String, dynamic>) {
+    log('📱 [AuthViewModel] Signup successful', name: 'Auth');
+    
+    // Always send OTP for email verification after signup
+    status.value = AuthStatus.success;
+    log('📱 [AuthViewModel] Sending verification OTP after signup', name: 'Auth');
+    
+    // Store email temporarily before clearing form
+    final userEmail = email.value.trim();
+    
+    // Clear form
+    clearForm();
+    
+    // Navigate to OTP verification with email
+    NavigationService.goToOTPVerification(
+      email: userEmail,
+      type: OTPType.EmailVerification,
+    );
+    
+    Get.snackbar('Success', 'Signup successful! Please verify your email.');
+  }
+} else {
+        _handleSignupError(response.message);
       }
     } catch (e, stackTrace) {
-      log('🔥 [AuthViewModel] Exception in signup(): $e', name: 'Auth');
-      log('🔥 [AuthViewModel] Stack trace: $stackTrace', name: 'Auth');
-      
-      errorMessage.value = 'Connection error: ${e.toString()}';
-      status.value = AuthStatus.error;
-      Get.snackbar('Error', errorMessage.value);
+      _handleException('signup', e, stackTrace);
+    } finally {
+      status.value = AuthStatus.initial;
     }
   }
 
+  // Send verification OTP
+  Future<void> sendVerificationOTP({
+    required String email,
+    required OTPType type,
+  }) async {
+    try {
+      log(
+        '📨 [AuthViewModel] Sending verification OTP to: $email',
+        name: 'Auth',
+      );
+      status.value = AuthStatus.loading;
+      errorMessage.value = '';
+
+      final request = SendOTPRequest(email: email, type: type);
+      final response = await _authService.sendOTP(request);
+
+      if (response.success) {
+        status.value = AuthStatus.success;
+
+        // Navigate to OTP verification screen
+        NavigationService.goToOTPVerification(email: email, type: type);
+
+        Get.snackbar('Success', 'OTP sent to your email');
+      } else {
+        status.value = AuthStatus.error;
+        errorMessage.value = response.message ?? 'Failed to send OTP';
+        Get.snackbar('Error', errorMessage.value);
+      }
+    } catch (e, stackTrace) {
+      _handleException('sendVerificationOTP', e, stackTrace);
+    }
+  }
+
+  // Forgot password with OTP
+  Future<void> forgotPassword(String email) async {
+    try {
+      status.value = AuthStatus.loading;
+      errorMessage.value = '';
+
+      final response = await _authService.sendPasswordResetOTP(email);
+
+      if (response.success) {
+        status.value = AuthStatus.success;
+
+        // Navigate to OTP verification
+        NavigationService.goToOTPVerification(
+          email: email,
+          type: OTPType.PasswordReset,
+        );
+
+        Get.snackbar('Success', 'OTP sent to your email');
+      } else {
+        status.value = AuthStatus.error;
+        errorMessage.value = response.message ?? 'Failed to send OTP';
+        Get.snackbar('Error', errorMessage.value);
+      }
+    } catch (e, stackTrace) {
+      _handleException('forgotPassword', e, stackTrace);
+    }
+  }
+
+  // Logout
   Future<void> logout() async {
     try {
       log('📱 [AuthViewModel] logout() started', name: 'Auth');
       final response = await _authService.logout();
-      
+
       if (response.success) {
         currentUser.value = null;
         status.value = AuthStatus.initial;
         clearForm();
+
+        await _clearUserSession();
+
         log('📱 [AuthViewModel] Logout successful', name: 'Auth');
-        AppRoutes.goToLogin();
+        NavigationService.goToLogin();
       } else {
         errorMessage.value = response.message ?? 'Logout failed';
         Get.snackbar('Error', errorMessage.value);
       }
     } catch (e, stackTrace) {
       log('🔥 [AuthViewModel] Exception in logout(): $e', name: 'Auth');
-      log('🔥 [AuthViewModel] Stack trace: $stackTrace', name: 'Auth');
+      NavigationService.goToLogin();
     }
   }
 
-  void toggleRememberMe() {
-    rememberMe.value = !rememberMe.value;
-    log('📱 [AuthViewModel] Remember me toggled: ${rememberMe.value}', name: 'Auth');
+  // Helper methods
+  User? _parseUserFromResponse(Map<String, dynamic> responseData) {
+    try {
+      Map<String, dynamic> userData;
+
+      if (responseData.containsKey('user')) {
+        userData = responseData['user'] as Map<String, dynamic>;
+      } else {
+        userData = responseData;
+      }
+
+      return User(
+        id: userData['id']?.toString() ?? '',
+        email:
+            userData['userName']?.toString() ??
+            userData['email']?.toString() ??
+            '',
+        name: '${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}'
+            .trim(),
+        type: UserType.user,
+      );
+    } catch (e) {
+      log('❌ [AuthViewModel] Error parsing user: $e', name: 'Auth');
+      return null;
+    }
+  }
+
+  void _handleInvalidResponse() {
+    errorMessage.value = 'Invalid response format from server';
+    status.value = AuthStatus.error;
+    Get.snackbar('Error', errorMessage.value);
+  }
+
+  void _handleLoginError(String? message) {
+    errorMessage.value =
+        message ?? 'Login failed. Please check your credentials.';
+    status.value = AuthStatus.error;
+    Get.snackbar('Error', errorMessage.value);
+  }
+
+  void _handleSignupError(String? message) {
+    errorMessage.value = message ?? 'Signup failed';
+    status.value = AuthStatus.error;
+    Get.snackbar('Error', errorMessage.value);
+  }
+
+  void _handleException(String method, dynamic e, StackTrace stackTrace) {
+    log('🔥 [AuthViewModel] Exception in $method(): $e', name: 'Auth');
+
+    errorMessage.value = 'Connection error: ${e.toString()}';
+    status.value = AuthStatus.error;
+    Get.snackbar('Error', errorMessage.value);
+  }
+
+  Future<void> _saveUserSession(User user, String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_id', user.id);
+      await prefs.setString('user_email', user.email);
+      await prefs.setString('user_name', user.name);
+      await prefs.setString('auth_token', token);
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setBool('remember_me', rememberMe.value);
+
+      log('📱 [AuthViewModel] User session saved', name: 'Auth');
+    } catch (e) {
+      log('❌ [AuthViewModel] Error saving user session: $e', name: 'Auth');
+    }
+  }
+
+  Future<void> _clearUserSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_id');
+      await prefs.remove('user_email');
+      await prefs.remove('user_name');
+      await prefs.remove('auth_token');
+      await prefs.setBool('is_logged_in', false);
+
+      log('📱 [AuthViewModel] User session cleared', name: 'Auth');
+    } catch (e) {
+      log('❌ [AuthViewModel] Error clearing user session: $e', name: 'Auth');
+    }
+  }
+
+  Future<void> checkSavedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+      final rememberMeValue = prefs.getBool('remember_me') ?? false;
+
+      if (isLoggedIn && rememberMeValue) {
+        final email = prefs.getString('user_email');
+        final name = prefs.getString('user_name');
+        final token = prefs.getString('auth_token');
+
+        if (email != null && name != null && token != null) {
+          currentUser.value = User(
+            id: prefs.getString('user_id') ?? '',
+            email: email,
+            name: name,
+            type: UserType.user,
+          );
+
+          _authService.setAuthToken(token);
+          rememberMe.value = true;
+
+          log('📱 [AuthViewModel] User session restored', name: 'Auth');
+          NavigationService.goToChat();
+        }
+      }
+    } catch (e) {
+      log('❌ [AuthViewModel] Error checking saved session: $e', name: 'Auth');
+    }
+  }
+
+  Future<bool> isEmailVerified(String email) async {
+    try {
+      final response = await _authService.checkEmailVerified(email);
+      return response.success && (response.data ?? false);
+    } catch (e) {
+      log(
+        '❌ [AuthViewModel] Error checking email verification: $e',
+        name: 'Auth',
+      );
+      return false;
+    }
   }
 
   void clearForm() {
     email.value = '';
     password.value = '';
     confirmPassword.value = '';
-    name.value = '';
+    firstName.value = '';
+    lastName.value = '';
     obscurePassword.value = true;
     obscureConfirmPassword.value = true;
     emailError.value = '';
     passwordError.value = '';
     confirmPasswordError.value = '';
-    nameError.value = '';
+    firstNameError.value = '';
+    lastNameError.value = '';
     errorMessage.value = '';
     agreeToTerms.value = false;
+  }
+
+  void toggleRememberMe() {
+    rememberMe.value = !rememberMe.value;
+    log(
+      '📱 [AuthViewModel] Remember me toggled: ${rememberMe.value}',
+      name: 'Auth',
+    );
   }
 
   @override

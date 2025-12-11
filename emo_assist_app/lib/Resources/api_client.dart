@@ -1,6 +1,7 @@
 // lib/Resources/api_client.dart
 import 'dart:convert';
 import 'dart:io';
+import 'package:emo_assist_app/Models/OTP.dart';
 import 'package:http/http.dart' as http;
 import 'api_routes.dart';
 import 'app_config.dart';
@@ -244,42 +245,49 @@ class ApiClient {
     }
   }
 
-  /// Generic POST request
-  Future<ApiResponse<T>> post<T>(
-    String endpoint, {
-    Map<String, dynamic>? body,
-    Map<String, String>? headers,
-    T Function(Map<String, dynamic>)? fromJson,
-    Duration? timeout,
-  }) async {
-    try {
-      final uri = Uri.parse(endpoint);
-      
-      print('POST Request to: $uri');
-      print('Request Body: ${json.encode(body)}');
-      
-      final response = await _client
-          .post(
-            uri,
-            headers: _getHeaders(headers),
-            body: body != null ? json.encode(body) : null,
-          )
-          .timeout(timeout ?? AppConfig.defaultTimeout);
-
-      print('Response Status: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
-      return _handleResponse<T>(response, fromJson);
-    } on SocketException {
-      return ApiResponse.error('No internet connection');
-    } on HttpException catch (e) {
-      return ApiResponse.error('HTTP error: ${e.message}');
-    } on FormatException {
-      return ApiResponse.error('Invalid response format');
-    } catch (e) {
-      return ApiResponse.error('Unexpected error: $e');
+ /// Generic POST request with query parameters support
+Future<ApiResponse<T>> post<T>(
+  String endpoint, {
+  Map<String, dynamic>? body,
+  Map<String, String>? queryParameters, // Add this parameter
+  Map<String, String>? headers,
+  T Function(Map<String, dynamic>)? fromJson,
+  Duration? timeout,
+}) async {
+  try {
+    // Build URI with query parameters if provided
+    Uri uri = Uri.parse(endpoint);
+    if (queryParameters != null && queryParameters.isNotEmpty) {
+      uri = uri.replace(queryParameters: queryParameters);
     }
+
+    print('POST Request to: $uri');
+    if (body != null) {
+      print('Request Body: ${json.encode(body)}');
+    }
+    
+    final response = await _client
+        .post(
+          uri,
+          headers: _getHeaders(headers),
+          body: body != null ? json.encode(body) : null,
+        )
+        .timeout(timeout ?? AppConfig.defaultTimeout);
+
+    print('Response Status: ${response.statusCode}');
+    print('Response Body: ${response.body}');
+
+    return _handleResponse<T>(response, fromJson);
+  } on SocketException {
+    return ApiResponse.error('No internet connection');
+  } on HttpException catch (e) {
+    return ApiResponse.error('HTTP error: ${e.message}');
+  } on FormatException {
+    return ApiResponse.error('Invalid response format');
+  } catch (e) {
+    return ApiResponse.error('Unexpected error: $e');
   }
+}
 
   /// Generic PUT request
   Future<ApiResponse<T>> put<T>(
@@ -462,5 +470,62 @@ extension ApiClientExtensions on ApiClient {
 
   Future<ApiResponse<Map<String, dynamic>>> healthCheck() {
     return get<Map<String, dynamic>>(API.healthCheck);
+  }
+
+   Future<ApiResponse<Map<String, dynamic>>> sendOTP(
+    SendOTPRequest request,
+  ) {
+    return post<Map<String, dynamic>>(
+      API.sendOTP,
+      body: request.toJson(),
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> verifyOTP(
+    OTPRequest request,
+  ) {
+    return post<Map<String, dynamic>>(
+      API.verifyOTP,
+      body: request.toJson(),
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> resendOTP(
+    String email,
+    OTPType type,
+  ) {
+    return post<Map<String, dynamic>>(
+      API.resendOTP,
+      queryParameters: {
+        'email': email,
+        'type': type.toString().split('.').last,
+      },
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> sendPasswordResetOTP(
+    SendOTPRequest request,
+  ) {
+    return post<Map<String, dynamic>>(
+      API.sendPasswordResetOTP,
+      body: request.toJson(),
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> resetPasswordWithOTP(
+    ResetPasswordWithOTPRequest request,
+  ) {
+    return post<Map<String, dynamic>>(
+      API.resetPasswordWithOTP,
+      body: request.toJson(),
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> checkEmailVerified(
+    String email,
+  ) {
+    return get<Map<String, dynamic>>(
+      '${API.checkEmailVerified}/$email',
+    );
   }
 }

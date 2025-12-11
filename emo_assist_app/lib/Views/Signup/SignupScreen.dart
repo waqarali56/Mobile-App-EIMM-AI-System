@@ -78,22 +78,43 @@ class SignupScreen extends StatelessWidget {
                 return const SizedBox.shrink();
               }),
               
-              // Name Field
+              // First Name Field
               Obx(() => TextFormField(
                 decoration: InputDecoration(
-                  labelText: 'Full Name',
-                  hintText: 'Enter your name',
+                  labelText: 'First Name',
+                  hintText: 'Enter your first name',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                   prefixIcon: const Icon(Icons.person_outline),
-                  errorText: viewModel.nameError.value.isEmpty
+                  errorText: viewModel.firstNameError.value.isEmpty
                       ? null
-                      : viewModel.nameError.value,
+                      : viewModel.firstNameError.value,
                 ),
                 onChanged: (value) {
-                  viewModel.name.value = value;
-                  viewModel.validateName();
+                  viewModel.firstName.value = value;
+                  viewModel.validateFirstName();
+                },
+                textInputAction: TextInputAction.next,
+              )),
+              const SizedBox(height: 16),
+              
+              // Last Name Field
+              Obx(() => TextFormField(
+                decoration: InputDecoration(
+                  labelText: 'Last Name',
+                  hintText: 'Enter your last name',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  prefixIcon: const Icon(Icons.person_outline),
+                  errorText: viewModel.lastNameError.value.isEmpty
+                      ? null
+                      : viewModel.lastNameError.value,
+                ),
+                onChanged: (value) {
+                  viewModel.lastName.value = value;
+                  viewModel.validateLastName();
                 },
                 textInputAction: TextInputAction.next,
               )),
