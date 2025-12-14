@@ -1,10 +1,10 @@
 // Screens/Chat/ChatScreen.dart
 import 'package:emo_assist_app/Services/navigation_service.dart';
+import 'package:emo_assist_app/ViewModels/Chat/ChatViewModel.dart';
 import 'package:emo_assist_app/Views/CommonWidgets/AppBarWidget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
-import 'package:emo_assist_app/ViewModels/ChatViewModel.dart';
 import 'package:emo_assist_app/Views/Chat/Widgets/ChatMessageBubble.dart';
 import 'package:emo_assist_app/Views/Chat/Widgets/ChatInputArea.dart';
 import 'package:emo_assist_app/Views/Chat/Widgets/EmptyChatState.dart';
@@ -40,10 +40,12 @@ class ChatScreen extends StatelessWidget {
                 // Typing indicator
                 TypingIndicator(viewModel: viewModel),
 
-                // Input area - fixed at bottom
-                ChatInputArea(
-                  viewModel: viewModel,
-                  scrollController: _scrollController,
+                Container(
+                  margin: const EdgeInsets.only(top: 4), // Add small margin
+                  child: ChatInputArea(
+                    viewModel: viewModel,
+                    scrollController: _scrollController,
+                  ),
                 ),
               ],
             );
@@ -84,9 +86,8 @@ class ChatScreen extends StatelessWidget {
         itemBuilder: (context, index) {
           final message = viewModel.messages[index];
           final isUser = message.startsWith('You:');
-          final messageText = isUser
-              ? message.substring(4)
-              : message.substring(10);
+          final messageText =
+              isUser ? message.substring(4) : message.substring(10);
 
           return ChatMessageBubble(
             message: messageText,

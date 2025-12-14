@@ -1,45 +1,41 @@
 class EmotionData {
-  final String dominantEmotion;
-  final Map<String, double> emotionScores;
-  final DateTime timestamp;
-  final EmotionSource source;
+  final int facesDetected;
+  final List<EmotionResult> results;
 
   EmotionData({
-    required this.dominantEmotion,
-    required this.emotionScores,
-    required this.timestamp,
-    required this.source,
+    required this.facesDetected,
+    required this.results,
   });
 
   factory EmotionData.fromJson(Map<String, dynamic> json) {
     return EmotionData(
-      dominantEmotion: json['dominantEmotion'] ?? 'neutral',
-      emotionScores: Map<String, double>.from(json['emotionScores'] ?? {}),
-      timestamp: DateTime.parse(json['timestamp']),
-      source: _parseEmotionSource(json['source']),
+      facesDetected: json['faces_detected'] ?? 0,
+      results: (json['results'] as List?)
+              ?.map((item) => EmotionResult.fromJson(item))
+              .toList() ??
+          [],
     );
   }
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'dominantEmotion': dominantEmotion,
-      'emotionScores': emotionScores,
-      'timestamp': timestamp.toIso8601String(),
-      'source': source.name,
-    };
-  }
+class EmotionResult {
+  final String emotion;
+  final double confidence;
+  final Map<String, double> probabilities;
 
-  static EmotionSource _parseEmotionSource(String source) {
-    switch (source) {
-      case 'voice':
-        return EmotionSource.voice;
-      case 'facial':
-        return EmotionSource.facial;
-      case 'fused':
-        return EmotionSource.fused;
-      default:
-        return EmotionSource.text;
-    }
+  EmotionResult({
+    required this.emotion,
+    required this.confidence,
+    required this.probabilities,
+  });
+
+  factory EmotionResult.fromJson(Map<String, dynamic> json) {
+    return EmotionResult(
+      emotion: json['emotion'] ?? 'Unknown',
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
+      probabilities: Map<String, double>.from(
+          json['probabilities'] ?? {}),
+    );
   }
 }
 
@@ -49,3 +45,6 @@ enum EmotionSource {
   facial,
   fused,
 }
+
+
+

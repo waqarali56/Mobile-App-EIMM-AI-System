@@ -7,13 +7,33 @@ class AppConfig {
 
   static Environment get currentEnvironment => _currentEnvironment;
 
+  // Main .NET backend URL
   static String get baseUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        // Use your actual backend URL from the logs
-        return 'http://192.168.36.28:5104/api/v1';  // HTTPS endpoint from your logs
+        return 'http://192.168.36.28:5104/api/v1';
       case Environment.production:
         return 'https://your-production-domain/api/v1';
+    }
+  }
+
+  // Model URLs for voice, image, video (Port 8000)
+  static String get modelBaseUrl1 {
+    switch (_currentEnvironment) {
+      case Environment.development:
+        return 'http://182.180.159.89:8000';
+      case Environment.production:
+        return 'https://your-model1-production-domain';
+    }
+  }
+
+  // Model URL for text (Port 8001)
+  static String get modelBaseUrl2 {
+    switch (_currentEnvironment) {
+      case Environment.development:
+        return 'http://182.180.159.89:8001';
+      case Environment.production:
+        return 'https://your-model2-production-domain';
     }
   }
 
@@ -38,6 +58,8 @@ class AppConfig {
     return {
       'environment': _currentEnvironment.name,
       'baseUrl': baseUrl,
+      'modelBaseUrl1': modelBaseUrl1,
+      'modelBaseUrl2': modelBaseUrl2,
       'isProduction': isProduction,
       'isDevelopment': isDevelopment,
       'enableLogging': enableLogging,

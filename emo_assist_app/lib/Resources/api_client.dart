@@ -91,6 +91,15 @@ class ApiClient {
     'Accept': 'application/json',
   };
 
+  /// Base URL for main .NET backend
+  String get baseUrl => AppConfig.baseUrl;
+  
+  /// Base URL for model 1 (voice, image, video)
+  String get modelBaseUrl1 => AppConfig.modelBaseUrl1;
+  
+  /// Base URL for model 2 (text)
+  String get modelBaseUrl2 => AppConfig.modelBaseUrl2;
+
   /// Set authentication token
   void setAuthToken(String token) {
     _authToken = token;
@@ -103,7 +112,7 @@ class ApiClient {
   }
 
   /// Clear authentication tokens
-  void clearAuthTokens() {  // Fixed: clearAuthTokenS (plural)
+  void clearAuthTokens() {
     _authToken = null;
     _refreshToken = null;
     _defaultHeaders.remove('Authorization');
@@ -113,7 +122,7 @@ class ApiClient {
   String? get authToken => _authToken;
   
   /// Get current refresh token
-  String? get refreshToken => _refreshToken;  // Fixed: Only one getter
+  String? get refreshToken => _refreshToken;
 
   /// Set custom headers
   void setCustomHeaders(Map<String, String> headers) {
@@ -129,7 +138,7 @@ class ApiClient {
     return headers;
   }
 
-  /// Handle HTTP response with backend format
+  /// Handle HTTP response (generic for all APIs)
   ApiResponse<T> _handleResponse<T>(
     http.Response response,
     T Function(Map<String, dynamic>)? fromJson,
@@ -140,28 +149,12 @@ class ApiClient {
       final responseBody = response.body.isEmpty ? '{}' : response.body;
       final Map<String, dynamic> jsonResponse = json.decode(responseBody);
 
-      // Handle your backend response format
+      // Handle successful responses
       if (statusCode >= 200 && statusCode < 300) {
-        // Check if response has success property (your backend format)
-        final success = jsonResponse['success'] ?? true;
-        
-        if (!success) {
-          final errorMessage = jsonResponse['message'] ?? 
-                              jsonResponse['error'] ?? 
-                              'Operation failed';
-          return ApiResponse.error(
-            errorMessage,
-            statusCode: statusCode,
-            rawResponse: jsonResponse,
-          );
-        }
-
-        // Success response
-        final responseData = jsonResponse['data'] ?? jsonResponse;
-        
-        if (fromJson != null && responseData != null) {
+        // For model APIs, they return direct data without 'success' property
+        if (fromJson != null) {
           try {
-            final data = fromJson(responseData);
+            final data = fromJson(jsonResponse);
             return ApiResponse.success(
               data,
               statusCode: statusCode,
@@ -176,31 +169,30 @@ class ApiClient {
           }
         } else {
           return ApiResponse.success(
-            responseData as T,
+            jsonResponse as T,
             statusCode: statusCode,
             rawResponse: jsonResponse,
           );
         }
       } else {
-        // Error response
-        final errorMessage = jsonResponse['message'] ??
-                            jsonResponse['error'] ??
-                            jsonResponse['title'] ??
-                            'HTTP Error $statusCode';
-        
-        // Extract validation errors if present
-        String detailedMessage = errorMessage;
-        if (jsonResponse['errors'] != null) {
-          final errors = jsonResponse['errors'];
-          if (errors is Map) {
-            detailedMessage += '\n${errors.entries.map((e) => '${e.key}: ${e.value}').join('\n')}';
-          } else if (errors is List) {
-            detailedMessage += '\n${errors.join('\n')}';
-          }
+        // Error response - handle validation errors (422)
+        if (statusCode == 422) {
+          final errorMessage = _extractValidationError(jsonResponse);
+          return ApiResponse.error(
+            errorMessage,
+            statusCode: statusCode,
+            rawResponse: jsonResponse,
+          );
         }
         
+        // Other errors
+        final errorMessage = jsonResponse['message'] ??
+                            jsonResponse['error'] ??
+                            jsonResponse['detail'] ??
+                            'HTTP Error $statusCode';
+        
         return ApiResponse.error(
-          detailedMessage,
+          errorMessage.toString(),
           statusCode: statusCode,
           rawResponse: jsonResponse,
         );
@@ -215,16 +207,32 @@ class ApiClient {
     }
   }
 
-  /// Generic GET request
+  String _extractValidationError(Map<String, dynamic> jsonResponse) {
+    if (jsonResponse['detail'] is List) {
+      final details = jsonResponse['detail'] as List;
+      return details.map((detail) {
+        if (detail is Map) {
+          return detail['msg'] ?? detail['message'] ?? 'Validation error';
+        }
+        return detail.toString();
+      }).join('\n');
+    }
+    return jsonResponse['detail']?.toString() ?? 'Validation error';
+  }
+
+  /// Generic GET request with custom base URL
   Future<ApiResponse<T>> get<T>(
     String endpoint, {
+    String baseUrl = '',
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
     T Function(Map<String, dynamic>)? fromJson,
     Duration? timeout,
   }) async {
     try {
-      Uri uri = Uri.parse(endpoint);
+      final url = _buildUrl(endpoint, baseUrl);
+      Uri uri = Uri.parse(url);
+      
       if (queryParameters != null && queryParameters.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParameters);
       }
@@ -245,49 +253,205 @@ class ApiClient {
     }
   }
 
- /// Generic POST request with query parameters support
-Future<ApiResponse<T>> post<T>(
+  /// Generic POST request with custom base URL
+  Future<ApiResponse<T>> post<T>(
+    String endpoint, {
+    String baseUrl = '',
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    Map<String, String>? headers,
+    T Function(Map<String, dynamic>)? fromJson,
+    Duration? timeout,
+  }) async {
+    try {
+      final url = _buildUrl(endpoint, baseUrl);
+      Uri uri = Uri.parse(url);
+      
+      if (queryParameters != null && queryParameters.isNotEmpty) {
+        uri = uri.replace(queryParameters: queryParameters);
+      }
+
+      print('POST Request to: $uri');
+      if (body != null) {
+        print('Request Body: ${json.encode(body)}');
+      }
+      
+      final response = await _client
+          .post(
+            uri,
+            headers: _getHeaders(headers),
+            body: body != null ? json.encode(body) : null,
+          )
+          .timeout(timeout ?? AppConfig.defaultTimeout);
+
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      return _handleResponse<T>(response, fromJson);
+    } on SocketException {
+      return ApiResponse.error('No internet connection');
+    } on HttpException catch (e) {
+      return ApiResponse.error('HTTP error: ${e.message}');
+    } on FormatException {
+      return ApiResponse.error('Invalid response format');
+    } catch (e) {
+      return ApiResponse.error('Unexpected error: $e');
+    }
+  }
+
+  /// Build URL with appropriate base URL
+  String _buildUrl(String endpoint, String customBaseUrl) {
+    if (customBaseUrl.isNotEmpty) {
+      return customBaseUrl + endpoint;
+    }
+    
+    // Determine which base URL to use based on endpoint
+    if (endpoint.startsWith('/predict/')) {
+      return modelBaseUrl1 + endpoint;
+    } else if (endpoint.startsWith('/predict_text')) {
+      return modelBaseUrl2 + endpoint;
+    } else {
+      return this.baseUrl + endpoint;
+    }
+  }
+
+ Future<ApiResponse<T>> multipartPost<T>(
   String endpoint, {
-  Map<String, dynamic>? body,
-  Map<String, String>? queryParameters, // Add this parameter
+  String baseUrl = '',
+  List<http.MultipartFile>? files,
+  Map<String, String>? fields,
+  required T Function(Map<String, dynamic>) fromJson,
   Map<String, String>? headers,
-  T Function(Map<String, dynamic>)? fromJson,
   Duration? timeout,
 }) async {
   try {
-    // Build URI with query parameters if provided
-    Uri uri = Uri.parse(endpoint);
-    if (queryParameters != null && queryParameters.isNotEmpty) {
-      uri = uri.replace(queryParameters: queryParameters);
-    }
-
-    print('POST Request to: $uri');
-    if (body != null) {
-      print('Request Body: ${json.encode(body)}');
+    print('🚀 [API] Starting multipart POST to: $endpoint');
+    final url = _buildUrl(endpoint, baseUrl);
+    print('🔗 [API] Full URL: $url');
+    final uri = Uri.parse(url);
+    
+    final request = http.MultipartRequest('POST', uri);
+    final requestHeaders = _getHeaders(headers);
+    requestHeaders.remove('Content-Type');
+    request.headers.addAll({
+      'accept': 'application/json',
+      ...requestHeaders,
+    });
+    
+    if (files != null) {
+      print('📎 [API] Attaching ${files.length} file(s)');
+      request.files.addAll(files);
     }
     
-    final response = await _client
-        .post(
-          uri,
-          headers: _getHeaders(headers),
-          body: body != null ? json.encode(body) : null,
-        )
-        .timeout(timeout ?? AppConfig.defaultTimeout);
-
-    print('Response Status: ${response.statusCode}');
-    print('Response Body: ${response.body}');
-
+    if (fields != null) {
+      print('📋 [API] Adding fields: ${fields.keys}');
+      request.fields.addAll(fields);
+    }
+    
+    print('⏳ [API] Sending request with timeout: ${timeout ?? AppConfig.uploadTimeout}');
+    
+    // Send request with timeout
+    final streamedResponse = await request.send()
+      .timeout(timeout ?? AppConfig.uploadTimeout);
+    print('✅ [API] Request sent successfully');
+    
+    // Convert streamed response to regular response
+    final response = await http.Response.fromStream(streamedResponse);
+    print('📥 [API] Response received: ${response.statusCode}');
+    
+    // Print response body (first 200 chars for brevity)
+    final responseBody = response.body;
+    if (responseBody.length > 200) {
+      print('📄 [API] Response body: ${responseBody.substring(0, 200)}...');
+    } else {
+      print('📄 [API] Response body: $responseBody');
+    }
+    
     return _handleResponse<T>(response, fromJson);
-  } on SocketException {
-    return ApiResponse.error('No internet connection');
-  } on HttpException catch (e) {
-    return ApiResponse.error('HTTP error: ${e.message}');
-  } on FormatException {
-    return ApiResponse.error('Invalid response format');
   } catch (e) {
-    return ApiResponse.error('Unexpected error: $e');
+    print('❌ [API] multipartPost error: $e');
+    // For stack trace, we need to handle it differently
+    if (e is Error) {
+      print('🧵 [API] Stack trace: ${e.stackTrace}');
+    }
+    return ApiResponse.error('Network error: ${e.toString()}');
   }
 }
+
+  /// Create multipart file from File object
+  Future<http.MultipartFile> createMultipartFile(
+    File file, {
+    String fieldName = 'file',
+    String? mimeType,
+  }) async {
+    mimeType ??= _getMimeType(file.path);
+    return http.MultipartFile.fromPath(
+      fieldName,
+      file.path,
+      contentType: mimeType != null ? http.MediaType.parse(mimeType) : null,
+    );
+  }
+
+  /// Create multipart file from bytes
+  Future<http.MultipartFile> createMultipartFileFromBytes(
+    List<int> bytes, {
+    required String fileName,
+    String? mimeType,
+    String fieldName = 'file',
+  }) async {
+    mimeType ??= _getMimeType(fileName);
+    return http.MultipartFile.fromBytes(
+      fieldName,
+      bytes,
+      filename: fileName,
+      contentType: mimeType != null ? http.MediaType.parse(mimeType) : null,
+    );
+  }
+
+  /// Get MIME type from file extension
+  String? _getMimeType(String path) {
+    final extension = path.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'mp4':
+        return 'video/mp4';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'mov':
+        return 'video/quicktime';
+      case 'wav':
+        return 'audio/wav';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'm4a':
+        return 'audio/x-m4a';
+      default:
+        return null;
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /// Generic PUT request
   Future<ApiResponse<T>> put<T>(
@@ -373,6 +537,25 @@ Future<ApiResponse<T>> post<T>(
       return ApiResponse.error('Unexpected error: $e');
     }
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /// Refresh access token
   Future<ApiResponse<Map<String, dynamic>>> refreshAccessToken() async {  // Renamed to avoid conflict
@@ -528,4 +711,7 @@ extension ApiClientExtensions on ApiClient {
       '${API.checkEmailVerified}/$email',
     );
   }
+
+
+
 }

@@ -1,9 +1,9 @@
 // Views/Chat/Widgets/DrawerWidget.dart
+import 'package:emo_assist_app/ViewModels/Chat/ChatViewModel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
 import 'package:emo_assist_app/Services/navigation_service.dart';
-import 'package:emo_assist_app/ViewModels/ChatViewModel.dart';
 
 class DrawerWidget extends StatelessWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;

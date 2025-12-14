@@ -1,0 +1,1120 @@
+// lib/ViewModels/Chat/ChatViewModel.dart
+import 'dart:io';
+import 'dart:async';
+import 'package:emo_assist_app/Models/TextEmotionData.dart';
+import 'package:emo_assist_app/Services/AudioVideoService.dart';
+import 'package:emo_assist_app/Services/emotion_api_service.dart';
+import 'package:emo_assist_app/Services/media_analysis_api_service.dart';
+import 'package:emo_assist_app/Services/navigation_service.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:emo_assist_app/ViewModels/Auth/AuthViewModel.dart';
+import 'package:emo_assist_app/Services/ImageService.dart';
+import 'package:emo_assist_app/Models/MediaEmotionData.dart';
+
+class ChatViewModel extends GetxController {
+  // Core chat properties
+  final RxList<String> messages = <String>[].obs;
+  final RxBool isLoading = false.obs;
+  final RxBool isGuestMode = false.obs;
+  final RxBool isTyping = false.obs;
+  final RxBool isAnalyzingText = false.obs; // New property for text analysis
+
+  // Multi-modal and premium properties
+  final RxBool isPremiumUser = false.obs;
+  final RxBool isConnected = true.obs;
+  final RxString connectionType = 'WiFi'.obs;
+
+  // Multi-modal emotion values (simulated for UI)
+  final RxDouble textSentimentScore = 0.80.obs;
+  final RxDouble voiceToneScore = 0.30.obs;
+  final RxDouble facialExpressionScore = 0.05.obs;
+
+  final RxString currentEmotion = 'Mild Anxiety'.obs;
+  final RxString emotionTag = 'Empathetic Response'.obs;
+
+  // Image handling properties
+  final Rx<File?> selectedImage = Rx<File?>(null);
+  final RxBool isUploadingImage = false.obs;
+  final RxDouble uploadProgress = 0.0.obs;
+  final RxList<File> selectedImages = <File>[].obs;
+
+  // Audio/Video properties
+  final AudioVideoService _audioVideoService = AudioVideoService();
+  final Rx<File?> selectedVideo = Rx<File?>(null);
+  final Rx<File?> selectedAudio = Rx<File?>(null);
+  final RxBool isRecordingAudio = false.obs;
+  final RxInt recordingDuration = 0.obs;
+
+  // File attachments
+  final RxList<String> selectedFiles = <String>[].obs;
+
+  // Conversation management
+  final RxString currentConversationId = ''.obs;
+  final RxList<Map<String, dynamic>> conversations =
+      <Map<String, dynamic>>[].obs;
+  final RxBool showMultiModalOptions = false.obs;
+
+  // Services
+  final ImageService _imageService = ImageService();
+  final MediaAnalysisService _mediaService = MediaAnalysisService();
+  final EmotionService _emotionService =
+      EmotionService(); // Add emotion service
+
+  // For showing/hiding upload notification
+  final RxString uploadStatus = ''.obs;
+  final RxBool showUploadNotification = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _checkUserStatus();
+    _addWelcomeMessage();
+    _simulateConnectionChanges();
+    _loadChatHistory();
+    _loadConversations();
+  }
+
+  void toggleMultiModalOptions(bool value) {
+    showMultiModalOptions.value = value;
+  }
+
+  /// Send message with text emotion analysis
+  void sendMessage(String message) async {
+    if (message.trim().isEmpty) return;
+
+    // Add user message immediately
+    messages.add('You: $message');
+
+    // Start text analysis
+    isAnalyzingText.value = true;
+    isTyping.value = true;
+
+    try {
+      // Analyze text emotions using API
+      final result = await _emotionService.analyzeText(message);
+
+      if (result.success && result.data != null) {
+        final emotionData = result.data!;
+
+        // Update emotion scores based on API response
+        _updateEmotionScoresFromAPI(emotionData);
+
+        // Generate response based on detected emotion
+        final response = _generateResponseFromEmotion(message, emotionData);
+
+        // Add AI response
+        await Future.delayed(const Duration(seconds: 1));
+        messages.add('EmoAssist: $response');
+
+        // Add emotion analysis details as a system message
+        if (emotionData.finalEmotion != 'context unclear') {
+          final emotionDetails = _formatEmotionDetails(emotionData);
+          messages.add('System: 📊 $emotionDetails');
+        }
+
+        // Update conversation preview
+        _updateConversationPreview(message, response);
+
+        // Save conversation
+        _saveCurrentConversation();
+      } else {
+        // Fallback to default response if API fails
+        await Future.delayed(const Duration(seconds: 1));
+        final response = _generateResponse(message);
+        messages.add('EmoAssist: $response');
+        _saveCurrentConversation();
+      }
+    } catch (e) {
+      print('Error analyzing text: $e');
+      // Fallback response
+      await Future.delayed(const Duration(seconds: 1));
+      final response = _generateResponse(message);
+      messages.add('EmoAssist: $response');
+      _saveCurrentConversation();
+    } finally {
+      isAnalyzingText.value = false;
+      isTyping.value = false;
+    }
+  }
+
+  /// Update emotion scores based on API response
+  void _updateEmotionScoresFromAPI(TextEmotionData emotionData) {
+    // Map emotions to sentiment scores
+    final emotion = emotionData.finalEmotion.toLowerCase();
+
+    if (emotion.contains('happy') || emotion.contains('joy')) {
+      textSentimentScore.value = 0.85 + (DateTime.now().millisecond % 10) / 100;
+      currentEmotion.value = 'Positive Mood';
+    } else if (emotion.contains('sad') || emotion.contains('sadness')) {
+      textSentimentScore.value = 0.25 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Sadness Detected';
+    } else if (emotion.contains('angry') || emotion.contains('anger')) {
+      textSentimentScore.value = 0.20 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Anger Detected';
+    } else if (emotion.contains('fear') || emotion.contains('anxious')) {
+      textSentimentScore.value = 0.35 + (DateTime.now().millisecond % 20) / 100;
+      currentEmotion.value = 'Anxiety Detected';
+    } else if (emotion.contains('surprise')) {
+      textSentimentScore.value = 0.70 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Surprise Detected';
+    } else {
+      textSentimentScore.value = 0.60 + (DateTime.now().millisecond % 20) / 100;
+      currentEmotion.value = 'Neutral State';
+    }
+
+    // Update emotion tag
+    emotionTag.value = 'AI-Powered Analysis';
+  }
+
+  /// Format emotion details for display
+  String _formatEmotionDetails(TextEmotionData emotionData) {
+    String details = 'Emotion Analysis:\n';
+    details += 'Overall: ${emotionData.finalEmotion}\n';
+
+    if (emotionData.weightedProbabilities.isNotEmpty) {
+      details += 'Confidence:\n';
+      emotionData.weightedProbabilities.forEach((emotion, prob) {
+        details += '  • $emotion: ${(prob * 100).toStringAsFixed(1)}%\n';
+      });
+    }
+
+    return details.trim();
+  }
+
+  /// Generate response based on detected emotion
+  String _generateResponseFromEmotion(
+      String message, TextEmotionData emotionData) {
+    final emotion = emotionData.finalEmotion.toLowerCase();
+
+    if (emotion.contains('happy') || emotion.contains('joy')) {
+      return 'I can sense the happiness in your message! 😊 That\'s wonderful to hear. What\'s bringing you joy today?';
+    } else if (emotion.contains('sad') || emotion.contains('sadness')) {
+      return 'I can tell you\'re feeling down right now. It\'s okay to feel this way. Would you like to talk about what\'s bothering you?';
+    } else if (emotion.contains('angry') || emotion.contains('anger')) {
+      return 'I sense some frustration in your words. It\'s natural to feel angry sometimes. Take a deep breath. Would you like to talk about what\'s upsetting you?';
+    } else if (emotion.contains('fear') || emotion.contains('anxious')) {
+      return 'I can feel the worry in your message. Anxiety can be overwhelming. Remember, you\'re not alone. Let\'s work through this together.';
+    } else if (emotion.contains('surprise')) {
+      return 'Something unexpected seems to have happened! Would you like to share more about it?';
+    } else if (emotion == 'context unclear') {
+      return _generateResponse(message);
+    } else {
+      return 'Thank you for sharing that with me. I\'m here to listen and support you. How are you feeling right now?';
+    }
+  }
+
+  /// Pick video from gallery
+  Future<void> pickVideoFromGallery() async {
+    try {
+      final File? video = await _audioVideoService.pickVideoFromGallery(
+        maxDuration: 120, // 2 minutes max
+        maxFileSize: 100 * 1024 * 1024, // 100MB max
+      );
+
+      if (video != null) {
+        selectedVideo.value = video;
+        // Process video immediately or wait for user to send
+        await _processSelectedVideo(video);
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to pick video: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Record video with camera
+  Future<void> recordVideoWithCamera() async {
+    try {
+      final File? video = await _audioVideoService.recordVideoWithCamera(
+        maxDuration: 60, // 1 minute max
+      );
+
+      if (video != null) {
+        selectedVideo.value = video;
+        await _processSelectedVideo(video);
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to record video: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Start audio recording
+  Future<void> startAudioRecording() async {
+    try {
+      final bool started = await _audioVideoService.startAudioRecording();
+      isRecordingAudio.value = started;
+
+      if (started) {
+        // Start timer to update recording duration
+        _startRecordingTimer();
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to start recording: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Stop audio recording
+  Future<void> stopAudioRecording() async {
+    try {
+      final File? audio = await _audioVideoService.stopAudioRecording();
+      isRecordingAudio.value = false;
+      recordingDuration.value = 0;
+
+      if (audio != null) {
+        selectedAudio.value = audio;
+        await _processSelectedAudio(audio);
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to stop recording: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Pick audio file from storage
+  Future<void> pickAudioFile() async {
+    try {
+      final File? audio = await _audioVideoService.pickAudioFile();
+
+      if (audio != null) {
+        selectedAudio.value = audio;
+        await _processSelectedAudio(audio);
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to pick audio: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Process selected video
+  Future<void> _processSelectedVideo(File video) async {
+    showUploadNotification.value = true;
+    uploadStatus.value = 'Analyzing video emotions...';
+    isUploadingImage.value = true;
+    uploadProgress.value = 0.0;
+
+    try {
+      uploadProgress.value = 0.3;
+
+      // Get video info
+      final videoInfo = _audioVideoService.getFileInfo(video);
+      final fileName = videoInfo['fileName'];
+      final fileSize = videoInfo['fileSizeFormatted'];
+
+      uploadProgress.value = 0.6;
+      uploadStatus.value = 'Extracting emotions from video...';
+
+      // Analyze video
+      final result = await _mediaService.analyzeVideo(video);
+
+      uploadProgress.value = 1.0;
+      uploadStatus.value = 'Adding results to chat...';
+
+      String emotionResult = 'No emotion analysis available';
+
+      if (result.success) {
+        final videoData = result.data!;
+        emotionResult = 'Video Analysis:\n';
+        emotionResult += 'Final Emotion: ${videoData.finalEmotion}\n';
+
+        // Format probabilities
+        emotionResult += 'Emotion Probabilities:\n';
+        videoData.finalProbabilities.forEach((emotion, probability) {
+          emotionResult +=
+              '  • $emotion: ${(probability * 100).toStringAsFixed(1)}%\n';
+        });
+      } else {
+        emotionResult = 'Video analysis failed: ${result.message}';
+      }
+
+      // Add message to chat
+      messages.add('You: 🎬 Video: $fileName ($fileSize)\n$emotionResult');
+      _saveCurrentConversation();
+
+      // Show success
+      showUploadNotification.value = false;
+      Get.snackbar(
+        '✅ Video Analyzed',
+        'Emotion analysis complete!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      showUploadNotification.value = false;
+      Get.snackbar(
+        'Error',
+        'Failed to analyze video: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isUploadingImage.value = false;
+      uploadProgress.value = 0.0;
+      selectedVideo.value = null;
+      uploadStatus.value = '';
+    }
+  }
+
+  /// Process selected audio
+  Future<void> _processSelectedAudio(File audio) async {
+    showUploadNotification.value = true;
+    uploadStatus.value = 'Analyzing voice emotions...';
+    isUploadingImage.value = true;
+    uploadProgress.value = 0.0;
+
+    try {
+      uploadProgress.value = 0.3;
+
+      // Get audio info
+      final audioInfo = _audioVideoService.getFileInfo(audio);
+      final fileName = audioInfo['fileName'];
+      final fileSize = audioInfo['fileSizeFormatted'];
+
+      uploadProgress.value = 0.6;
+      uploadStatus.value = 'Processing audio emotions...';
+
+      // Analyze audio
+      final result = await _mediaService.analyzeVoice(audio);
+
+      uploadProgress.value = 1.0;
+      uploadStatus.value = 'Adding results to chat...';
+
+      String emotionResult = 'No emotion analysis available';
+
+      if (result.success) {
+        final voiceData = result.data!;
+
+        if (voiceData.error != null) {
+          emotionResult = 'Audio Error: ${voiceData.error}';
+        } else if (voiceData.emotion != null) {
+          emotionResult = 'Voice Analysis:\n';
+          emotionResult += 'Detected Emotion: ${voiceData.emotion}\n';
+
+          if (voiceData.probabilities != null &&
+              voiceData.probabilities!.isNotEmpty) {
+            emotionResult += 'Emotion Probabilities:\n';
+            voiceData.probabilities!.forEach((emotion, probability) {
+              emotionResult +=
+                  '  • $emotion: ${(probability * 100).toStringAsFixed(1)}%\n';
+            });
+          }
+        } else {
+          emotionResult = 'No emotion detected in audio';
+        }
+      } else {
+        emotionResult = 'Voice analysis failed: ${result.message}';
+      }
+
+      // Add message to chat
+      messages.add('You: 🎤 Audio: $fileName ($fileSize)\n$emotionResult');
+      _saveCurrentConversation();
+
+      // Show success
+      showUploadNotification.value = false;
+      Get.snackbar(
+        '✅ Voice Analyzed',
+        'Emotion analysis complete!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      showUploadNotification.value = false;
+      Get.snackbar(
+        'Error',
+        'Failed to analyze audio: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isUploadingImage.value = false;
+      uploadProgress.value = 0.0;
+      selectedAudio.value = null;
+      uploadStatus.value = '';
+    }
+  }
+
+  /// Start recording timer
+  void _startRecordingTimer() {
+    Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (isRecordingAudio.value) {
+        recordingDuration.value++;
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  /// Clear selected video
+  void clearSelectedVideo() {
+    selectedVideo.value = null;
+  }
+
+  /// Clear selected audio
+  void clearSelectedAudio() {
+    selectedAudio.value = null;
+  }
+
+  // Add message to chat - FIXED VERSION
+  void addMessage(String message,
+      {bool isUser = false, bool showTyping = true}) {
+    if (isUser) {
+      messages.add('You: $message');
+
+      // Update emotion scores based on message content
+      _updateEmotionScores(message);
+
+      // Only show typing indicator for text messages (not for images)
+      if (showTyping) {
+        isTyping.value = true;
+
+        // Simulate AI response delay
+        Future.delayed(const Duration(seconds: 1), () {
+          isTyping.value = false;
+
+          // Generate appropriate response based on message
+          final response = _generateResponse(message);
+          messages.add('EmoAssist: $response');
+
+          // Update conversation preview
+          _updateConversationPreview(message, response);
+
+          // Update emotion tag for some messages
+          if (messages.length % 3 == 0) {
+            emotionTag.value = _getRandomEmotionTag();
+          }
+
+          // Save conversation after AI response
+          _saveCurrentConversation();
+        });
+      }
+
+      // Save conversation after user message
+      _saveCurrentConversation();
+    } else {
+      messages.add('EmoAssist: $message');
+    }
+  }
+
+  // Start a new conversation
+  void startNewConversation() {
+    // Save current conversation if it has messages
+    if (messages.length > 1) {
+      // More than just welcome message
+      _saveCurrentConversation();
+    }
+
+    // Clear current conversation 
+    messages.clear();
+    selectedFiles.clear();
+    clearSelectedImage();
+
+    // Generate new conversation ID
+    currentConversationId.value = _generateConversationId();
+
+    // Add welcome message
+    _addWelcomeMessage();
+
+    // Add to conversations list
+    conversations.insert(0, {
+      'id': currentConversationId.value,
+      'title': _generateConversationTitle(),
+      'timestamp': DateTime.now(),
+      'preview': 'New conversation started',
+      'messageCount': 1,
+    });
+  }
+
+  // Generate conversation ID
+  String _generateConversationId() {
+    return 'conv_${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  // Generate conversation title
+  String _generateConversationTitle() {
+    final now = DateTime.now();
+    final hour = now.hour;
+
+    if (hour < 12) {
+      return 'Morning Chat';
+    } else if (hour < 17) {
+      return 'Afternoon Chat';
+    } else {
+      return 'Evening Chat';
+    }
+  }
+
+  // Save current conversation
+  Future<void> _saveCurrentConversation() async {
+    if (messages.length <= 1) return; // Don't save if only welcome message
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedConversations =
+          prefs.getStringList('saved_conversations') ?? [];
+
+      final conversationData = {
+        'id': currentConversationId.value.isNotEmpty
+            ? currentConversationId.value
+            : _generateConversationId(),
+        'title': _getConversationTitleFromMessages(),
+        'timestamp': DateTime.now().toIso8601String(),
+        'messages': messages.toList(),
+        'messageCount': messages.length,
+      };
+
+      // Convert to JSON string
+      final conversationJson = conversationData.toString();
+      savedConversations.add(conversationJson);
+
+      // Keep only last 50 conversations
+      if (savedConversations.length > 50) {
+        savedConversations.removeAt(0);
+      }
+
+      await prefs.setStringList('saved_conversations', savedConversations);
+    } catch (e) {
+      print('Error saving conversation: $e');
+    }
+  }
+
+  // Load conversations from storage
+  Future<void> _loadConversations() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedConversations =
+          prefs.getStringList('saved_conversations') ?? [];
+
+      conversations.clear();
+      for (var convJson in savedConversations) {
+        try {
+          // Parse conversation data (simplified parsing)
+          // In a real app, you'd use proper JSON parsing
+          conversations.add({
+            'id': 'conv_${savedConversations.indexOf(convJson)}',
+            'title': 'Previous Conversation',
+            'timestamp': DateTime.now().subtract(
+              Duration(days: savedConversations.indexOf(convJson)),
+            ),
+            'preview': 'Previous chat',
+            'messageCount': 5,
+          });
+        } catch (e) {
+          continue;
+        }
+      }
+
+      // Sort by timestamp (newest first)
+      conversations.sort(
+        (a, b) =>
+            (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime),
+      );
+    } catch (e) {
+      print('Error loading conversations: $e');
+    }
+  }
+
+  String _getConversationTitleFromMessages() {
+    if (messages.length <= 1) return 'Empty Chat';
+
+    // Get first user message
+    final userMessages =
+        messages.where((msg) => msg.startsWith('You:')).toList();
+    if (userMessages.isNotEmpty) {
+      final firstUserMessage = userMessages.first.replaceFirst('You: ', '');
+      if (firstUserMessage.length > 30) {
+        return '${firstUserMessage.substring(0, 30)}...';
+      }
+      return firstUserMessage;
+    }
+
+    return 'Untitled Chat';
+  }
+
+  // Load a specific conversation
+  void loadConversation(String conversationId) {
+    // Save current conversation first
+    _saveCurrentConversation();
+
+    // Clear current messages and images
+    messages.clear();
+    selectedFiles.clear();
+    clearSelectedImage();
+
+    // In a real app, you would load from storage
+    // For now, simulate loading with sample messages
+    messages.add(
+      'EmoAssist: 👋 Welcome back! This is your previous conversation.',
+    );
+    messages.add('You: Hello, I was feeling anxious yesterday.');
+    messages.add('EmoAssist: I remember that. How are you feeling today?');
+
+    currentConversationId.value = conversationId;
+
+    Get.snackbar(
+      '📖 Conversation Loaded',
+      'Switched to previous conversation',
+      backgroundColor: Get.theme.primaryColor,
+      colorText: Colors.white,
+    );
+  }
+
+  // Delete a conversation
+  Future<void> deleteConversation(String conversationId) async {
+    conversations.removeWhere((conv) => conv['id'] == conversationId);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedConversations =
+          prefs.getStringList('saved_conversations') ?? [];
+
+      // Remove the conversation (simplified)
+      if (savedConversations.isNotEmpty) {
+        savedConversations.removeAt(0); // In real app, find by ID
+        await prefs.setStringList('saved_conversations', savedConversations);
+      }
+    } catch (e) {
+      print('Error deleting conversation: $e');
+    }
+
+    Get.snackbar(
+      '🗑️ Conversation Deleted',
+      'The conversation has been removed',
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+    );
+  }
+
+  Future<void> _checkUserStatus() async {
+    isLoading.value = true;
+    final prefs = await SharedPreferences.getInstance();
+    isGuestMode.value = prefs.getBool('is_guest') ?? false;
+    isPremiumUser.value = prefs.getBool('is_premium') ?? false;
+
+    if (currentConversationId.value.isEmpty) {
+      currentConversationId.value = _generateConversationId();
+    }
+
+    isLoading.value = false;
+  }
+
+  void _addWelcomeMessage() {
+    messages.add(
+      'EmoAssist: Hi there! 👋 I\'m EmoAssist, your emotional support companion powered by AI emotion detection. How can I assist you today?',
+    );
+  }
+
+  void _updateConversationPreview(String userMessage, String aiResponse) {
+    if (conversations.isNotEmpty) {
+      final index = conversations.indexWhere(
+        (conv) => conv['id'] == currentConversationId.value,
+      );
+      if (index != -1) {
+        conversations[index]['preview'] = aiResponse.length > 30
+            ? '${aiResponse.substring(0, 30)}...'
+            : aiResponse;
+        conversations[index]['timestamp'] = DateTime.now();
+        conversations[index]['messageCount'] = messages.length;
+      }
+    }
+  }
+
+  /// Original generate response method (fallback)
+  String _generateResponse(String userMessage) {
+    final lowercaseMessage = userMessage.toLowerCase();
+
+    if (lowercaseMessage.contains('how are you')) {
+      return 'I\'m here and ready to help you understand your feelings. How are you feeling today?';
+    } else if (lowercaseMessage.contains('sad') ||
+        lowercaseMessage.contains('depressed')) {
+      return 'I\'m sorry to hear you\'re feeling this way. It\'s okay to feel sad sometimes. Would you like to talk about what\'s bothering you?';
+    } else if (lowercaseMessage.contains('happy') ||
+        lowercaseMessage.contains('good')) {
+      return 'That\'s wonderful to hear! 😊 I\'m glad you\'re feeling positive. Would you like to share what made you happy today?';
+    } else if (lowercaseMessage.contains('anxious') ||
+        lowercaseMessage.contains('worried')) {
+      return 'Anxiety can be overwhelming. Remember to take deep breaths. Would you like some relaxation techniques?';
+    } else {
+      final responses = [
+        'Thank you for sharing that with me. How does that make you feel?',
+        'I understand. Can you tell me more about that?',
+        'That sounds challenging. How have you been coping with it?',
+        'I hear you. It\'s important to acknowledge these feelings.',
+      ];
+      return responses[DateTime.now().millisecond % responses.length];
+    }
+  }
+
+  void _updateEmotionScores(String message) {
+    final lowercaseMessage = message.toLowerCase();
+
+    if (lowercaseMessage.contains('happy') ||
+        lowercaseMessage.contains('good')) {
+      textSentimentScore.value = 0.85 + (DateTime.now().millisecond % 15) / 100;
+    } else if (lowercaseMessage.contains('sad') ||
+        lowercaseMessage.contains('bad')) {
+      textSentimentScore.value = 0.30 + (DateTime.now().millisecond % 20) / 100;
+    } else if (lowercaseMessage.contains('anxious') ||
+        lowercaseMessage.contains('worried')) {
+      textSentimentScore.value = 0.45 + (DateTime.now().millisecond % 25) / 100;
+    } else {
+      textSentimentScore.value = 0.65 + (DateTime.now().millisecond % 20) / 100;
+    }
+
+    if (isPremiumUser.value) {
+      voiceToneScore.value = 0.25 + (DateTime.now().second % 50) / 100;
+      facialExpressionScore.value = 0.10 + (DateTime.now().second % 30) / 100;
+    }
+
+    _updateCurrentEmotion();
+  }
+
+  void _updateCurrentEmotion() {
+    final double overallScore = textSentimentScore.value;
+
+    if (overallScore > 0.75) {
+      currentEmotion.value = 'Positive Mood';
+    } else if (overallScore > 0.5) {
+      currentEmotion.value = 'Neutral State';
+    } else if (overallScore > 0.25) {
+      currentEmotion.value = 'Mild Anxiety';
+    } else {
+      currentEmotion.value = 'Sadness Detected';
+    }
+  }
+
+  String _getRandomEmotionTag() {
+    final tags = [
+      'Empathetic Response',
+      'Supportive Message',
+      'Active Listening',
+      'Emotional Validation',
+      'Therapeutic Response',
+      'Mindful Approach',
+      'Compassionate Reply',
+    ];
+    return tags[DateTime.now().millisecond % tags.length];
+  }
+
+  void _simulateConnectionChanges() {
+    // Simulate network changes every 30 seconds
+    Future.delayed(const Duration(seconds: 30), () {
+      isConnected.value = DateTime.now().second % 10 != 0;
+      connectionType.value = isConnected.value
+          ? (DateTime.now().second % 2 == 0 ? 'WiFi' : '5G')
+          : 'Offline';
+
+      // Continue simulation
+      _simulateConnectionChanges();
+    });
+  }
+
+  // Premium upgrade method
+  Future<void> upgradeToPremium() async {
+    isLoading.value = true;
+
+    // Simulate API call
+    await Future.delayed(const Duration(seconds: 2));
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_premium', true);
+    isPremiumUser.value = true;
+
+    isLoading.value = false;
+
+    Get.snackbar(
+      '🎉 Premium Activated',
+      'You now have access to multi-modal emotion detection!',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Get.theme.primaryColor,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+    );
+
+    // Update emotion scores for premium features
+    voiceToneScore.value = 0.50;
+    facialExpressionScore.value = 0.25;
+  }
+
+  // Getters for UI
+  bool get showTypingIndicator => isTyping.value;
+
+  String get textSentimentPercentage =>
+      '${(textSentimentScore.value * 100).toInt()}%';
+  String get voiceTonePercentage => isPremiumUser.value
+      ? '${(voiceToneScore.value * 100).toInt()}%'
+      : 'Locked';
+  String get facialExpressionPercentage => isPremiumUser.value
+      ? '${(facialExpressionScore.value * 100).toInt()}%'
+      : 'Locked';
+
+  Future<void> logout() async {
+    // Save current conversation before logging out
+    _saveCurrentConversation();
+
+    final prefs = await SharedPreferences.getInstance();
+
+    if (isGuestMode.value) {
+      await prefs.remove('is_guest');
+      await prefs.remove('chat_history');
+      NavigationService.goToLogin();
+    } else {
+      final authViewModel = Get.find<AuthViewModel>();
+      await authViewModel.logout();
+    }
+  }
+
+  void clearChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('chat_history');
+    await prefs.remove('saved_conversations');
+    messages.clear();
+    conversations.clear();
+    clearSelectedImage();
+    _addWelcomeMessage();
+    currentConversationId.value = _generateConversationId();
+
+    Get.snackbar(
+      '🗑️ All Conversations Cleared',
+      'Your chat history has been cleared.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.orange,
+      colorText: Colors.white,
+    );
+  }
+
+  // Save chat history
+  Future<void> saveChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('chat_history', messages);
+      _saveCurrentConversation();
+    } catch (e) {
+      // Ignore error
+    }
+  }
+
+  // Load chat history
+  Future<void> _loadChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedHistory = prefs.getStringList('chat_history');
+      if (savedHistory != null && savedHistory.isNotEmpty) {
+        messages.assignAll(savedHistory);
+      }
+    } catch (e) {
+      // Ignore error, start fresh
+    }
+  }
+
+  // Image Picker Methods
+  Future<void> pickImageFromGallery() async {
+    try {
+      final File? image = await _imageService.pickImageFromGallery(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 85,
+      );
+
+      if (image != null) {
+        selectedImage.value = image;
+        // Don't process automatically - wait for user to send
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to pick image: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> takePhoto() async {
+    try {
+      final File? image = await _imageService.takePhotoWithCamera(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 85,
+      );
+
+      if (image != null) {
+        selectedImage.value = image;
+        // Don't process automatically - wait for user to send
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to take photo: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> pickMultipleImages() async {
+    try {
+      final List<File> images = await _imageService.pickMultipleImages(
+        maxImages: 5,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 85,
+      );
+
+      if (images.isNotEmpty) {
+        selectedImages.value = images;
+        // Process first image automatically
+        if (images.isNotEmpty) {
+          selectedImage.value = images.first;
+          // Don't process automatically - wait for user to send
+        }
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to pick images: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> processSelectedImage(File image) async {
+    print('🖼️ [ChatVM] Starting image processing');
+    isUploadingImage.value = true;
+    uploadProgress.value = 0.0;
+
+    // Show upload notification instead of dialog
+    showUploadNotification.value = true;
+    uploadStatus.value = 'Uploading image...';
+
+    try {
+      // Update progress
+      uploadProgress.value = 0.3;
+      uploadStatus.value = 'Validating image...';
+
+      // Check if it's a valid image
+      if (!_imageService.isImageFile(image)) {
+        throw Exception('Selected file is not a valid image');
+      }
+
+      // Show image info
+      final fileName = _imageService.getFileName(image);
+      final fileSize = _imageService.getFileSize(image);
+
+      // Update progress
+      uploadProgress.value = 0.6;
+      uploadStatus.value = 'Analyzing emotions...';
+
+      // Try to analyze the image for emotions
+      String emotionResult = 'No emotion analysis available';
+
+      try {
+        final result = await _mediaService.analyzeImage(image);
+
+        if (result.success) {
+          final emotionData = result.data!;
+          if (emotionData.facesDetected > 0) {
+            emotionResult = 'Detected ${emotionData.facesDetected} face(s): ';
+            for (var i = 0; i < emotionData.results.length; i++) {
+              final emotion = emotionData.results[i];
+              emotionResult +=
+                  'Face ${i + 1}: ${emotion.emotion} (${(emotion.confidence * 100).toStringAsFixed(1)}%) ';
+            }
+          } else {
+            emotionResult = 'No faces detected in image';
+          }
+        } else {
+          emotionResult = 'Analysis failed: ${result.message}';
+        }
+      } catch (e) {
+        emotionResult = 'Could not analyze emotions: $e';
+      }
+
+      // Update progress
+      uploadProgress.value = 1.0;
+      uploadStatus.value = 'Adding to chat...';
+
+      // Add image message to chat WITHOUT triggering AI response
+      messages.add('You: 📷 Image: $fileName ($fileSize)\n$emotionResult');
+      _saveCurrentConversation();
+
+      // Hide upload notification and show success snackbar
+      showUploadNotification.value = false;
+
+      Get.snackbar(
+        '✅ Image Analyzed',
+        'Emotion analysis complete! ${emotionResult.contains("Detected") ? "Face detected!" : "No faces found."}',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      print('💥 [ChatVM] Image processing error: $e');
+
+      // Hide upload notification and show error
+      showUploadNotification.value = false;
+
+      Get.snackbar(
+        'Error',
+        'Failed to process image: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isUploadingImage.value = false;
+      uploadProgress.value = 0.0;
+      selectedImage.value = null; // Clear after processing
+      uploadStatus.value = '';
+
+      // Ensure notification is hidden
+      Future.delayed(const Duration(milliseconds: 500), () {
+        showUploadNotification.value = false;
+      });
+    }
+  }
+
+  void clearSelectedImage() {
+    selectedImage.value = null;
+    selectedImages.clear();
+  }
+
+  @override
+  void onClose() {
+    // Save chat history when leaving
+    if (!isGuestMode.value) {
+      saveChatHistory();
+      _saveCurrentConversation();
+    }
+    super.onClose();
+  }
+}

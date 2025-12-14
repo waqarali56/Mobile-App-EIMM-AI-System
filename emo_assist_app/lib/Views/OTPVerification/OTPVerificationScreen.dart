@@ -1,9 +1,9 @@
 // Views/OTPVerificationScreen.dart
 import 'package:emo_assist_app/Models/OTP.dart';
+import 'package:emo_assist_app/ViewModels/Auth/OTPViewModel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
-import 'package:emo_assist_app/ViewModels/OTPViewModel.dart';
 import 'package:emo_assist_app/Enums/AppEnums.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
@@ -20,7 +20,6 @@ class OTPVerificationScreen extends StatefulWidget {
   State<OTPVerificationScreen> createState() => _OTPVerificationScreenState();
 }
 
-
 class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   late OTPViewModel viewModel;
   List<FocusNode> focusNodes = List.generate(6, (index) => FocusNode());
@@ -28,11 +27,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    viewModel = Get.put(OTPViewModel());
-    
+    viewModel = Get.find<OTPViewModel>();
     // Initialize with email from route or widget parameter
     String email = widget.email;
-    
+
     // If email is empty from route, try to get from Get parameters
     if (email.isEmpty) {
       final routeEmail = Get.parameters['email'];
@@ -40,7 +38,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         email = routeEmail;
       }
     }
-    
+
     // If still empty, try to get from arguments
     if (email.isEmpty) {
       final arguments = Get.arguments;
@@ -48,7 +46,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         email = arguments['email'];
       }
     }
-    
+
     // Get OTP type
     OTPType type = widget.type;
     final routeType = Get.parameters['type'];
@@ -58,7 +56,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         orElse: () => OTPType.EmailVerification,
       );
     }
-    
+
     // Initialize ViewModel
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (email.isNotEmpty) {
@@ -83,8 +81,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          viewModel.type == OTPType.EmailVerification 
-              ? 'Verify Email' 
+          viewModel.type == OTPType.EmailVerification
+              ? 'Verify Email'
               : 'Reset Password',
         ),
         leading: IconButton(
@@ -100,7 +98,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
-              
+
               // Title
               Text(
                 'Verification Code',
@@ -110,40 +108,48 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              
+
               // Description
-              Obx(() => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'We have sent a 6-digit OTP to:',
-                    style: Constants.bodyMedium.copyWith(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 5),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      viewModel.email.isNotEmpty ? viewModel.email : 'Loading...',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
+              Obx(
+                () => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'We have sent a 6-digit OTP to:',
+                      style: Constants.bodyMedium.copyWith(
+                        color: Colors.black54,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Please enter the code below to continue.',
-                    style: Constants.bodyMedium.copyWith(color: Colors.black54),
-                  ),
-                ],
-              )),
-              
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        viewModel.email.isNotEmpty
+                            ? viewModel.email
+                            : 'Loading...',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Please enter the code below to continue.',
+                      style: Constants.bodyMedium.copyWith(
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 40),
-              
+
               // Error message
               Obx(() {
                 if (viewModel.errorMessage.isNotEmpty) {
@@ -170,7 +176,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 }
                 return const SizedBox();
               }),
-              
+
               // OTP Fields
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -179,7 +185,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     width: 50,
                     child: TextFormField(
                       focusNode: focusNodes[index],
-                      controller: TextEditingController(text: viewModel.otpDigits[index]),
+                      controller: TextEditingController(
+                        text: viewModel.otpDigits[index],
+                      ),
                       textAlign: TextAlign.center,
                       keyboardType: TextInputType.number,
                       maxLength: 1,
@@ -195,9 +203,13 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       ),
                       onChanged: (value) {
                         if (value.length == 1 && index < 5) {
-                          FocusScope.of(context).requestFocus(focusNodes[index + 1]);
+                          FocusScope.of(
+                            context,
+                          ).requestFocus(focusNodes[index + 1]);
                         } else if (value.isEmpty && index > 0) {
-                          FocusScope.of(context).requestFocus(focusNodes[index - 1]);
+                          FocusScope.of(
+                            context,
+                          ).requestFocus(focusNodes[index - 1]);
                         }
                         viewModel.updateOTP(index, value);
                       },
@@ -205,62 +217,70 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                   );
                 }),
               ),
-              
+
               const SizedBox(height: 30),
-              
+
               // Timer
-              Obx(() => Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.timer_outlined),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Resend code in: ${viewModel.countdown}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              )),
-              
-              const SizedBox(height: 20),
-              
-              // Resend button
-              Obx(() => Center(
-                child: ElevatedButton(
-                  onPressed: viewModel.canResend ? viewModel.resendOTP : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: viewModel.canResend ? Colors.blue : Colors.grey,
+              Obx(
+                () => Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('Resend OTP'),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.timer_outlined),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Resend code in: ${viewModel.countdown}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
-              )),
-              
+              ),
+
+              const SizedBox(height: 20),
+
+              // Resend button
+              Obx(
+                () => Center(
+                  child: ElevatedButton(
+                    onPressed: viewModel.canResend ? viewModel.resendOTP : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: viewModel.canResend
+                          ? Colors.blue
+                          : Colors.grey,
+                    ),
+                    child: const Text('Resend OTP'),
+                  ),
+                ),
+              ),
+
               const Spacer(),
-              
+
               // Verify button
               SizedBox(
                 width: double.infinity,
-                child: Obx(() => ElevatedButton(
-                  onPressed: viewModel.canVerify ? viewModel.verifyOTP : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Obx(
+                  () => ElevatedButton(
+                    onPressed: viewModel.canVerify ? viewModel.verifyOTP : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: viewModel.isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            viewModel.type == OTPType.EmailVerification
+                                ? 'Verify Email'
+                                : 'Reset Password',
+                            style: const TextStyle(fontSize: 16),
+                          ),
                   ),
-                  child: viewModel.isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
-                          viewModel.type == OTPType.EmailVerification
-                              ? 'Verify Email'
-                              : 'Reset Password',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                )),
+                ),
               ),
             ],
           ),

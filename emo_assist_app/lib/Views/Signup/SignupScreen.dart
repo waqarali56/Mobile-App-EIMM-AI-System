@@ -1,8 +1,8 @@
 // lib/Views/Signup/SignupScreen.dart
+import 'package:emo_assist_app/ViewModels/Auth/AuthViewModel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
-import 'package:emo_assist_app/ViewModels/AuthViewModel.dart';
 
 class SignupScreen extends StatelessWidget {
   SignupScreen({super.key});

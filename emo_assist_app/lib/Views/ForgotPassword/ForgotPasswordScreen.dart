@@ -1,8 +1,8 @@
 // Views/ForgotPasswordScreen.dart
+import 'package:emo_assist_app/ViewModels/Auth/ForgotPasswordViewModel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
-import 'package:emo_assist_app/ViewModels/ForgotPasswordViewModel.dart';
 
 class ForgotPasswordScreen extends StatelessWidget {
   ForgotPasswordScreen({super.key});

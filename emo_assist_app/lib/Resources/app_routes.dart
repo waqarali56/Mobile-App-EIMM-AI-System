@@ -1,6 +1,6 @@
 import 'package:emo_assist_app/Models/OTP.dart';
 import 'package:emo_assist_app/Resources/RouteNames.dart';
-import 'package:emo_assist_app/Views/ChatHistory/ChatHistoryScreen.dart';
+import 'package:emo_assist_app/Views/Chat/ChatHistoryScreen.dart';
 import 'package:emo_assist_app/Views/ForgotPassword/ForgotPasswordScreen.dart';
 import 'package:emo_assist_app/Views/ForgotPassword/ResetPasswordScreen.dart';
 import 'package:emo_assist_app/Views/Home/HomeScreen.dart';

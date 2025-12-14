@@ -1,14 +1,14 @@
 // Views/Profile/ProfileScreen.dart
+import 'package:emo_assist_app/ViewModels/Auth/ProfileViewModel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
 import 'package:emo_assist_app/Services/navigation_service.dart';
-import 'package:emo_assist_app/ViewModels/ProfileViewModel.dart';
 
 class ProfileScreen extends StatelessWidget {
   ProfileScreen({super.key});
 
-  final ProfileViewModel viewModel = Get.put(ProfileViewModel());
+  final ProfileViewModel viewModel = Get.find<ProfileViewModel>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
