@@ -20,25 +20,23 @@ dependencies:
   smooth_page_indicator: ^1.1.0
   image_picker: ^1.0.7
   
-  # Video/audio support with corrected versions
+  # Video/audio support
   video_player: ^2.8.3
   chewie: ^1.8.5
   audioplayers: ^6.1.0
-  flutter_sound: ^9.11.5
+  flutter_sound: ^9.11.5  # Use this for audio recording
 
+  # Remove these problematic packages:
+  # just_audio: ^0.10.1
+  # audio_session: ^0.1.20
+  # record: ^4.4.0  # REMOVE THIS - causing Gradle error
 
- # Add these audio processing dependencies
-  just_audio: ^0.10.1
-  audio_session: ^0.1.20
-  record: ^4.4.0  # For better audio recording with WAV support
   path_provider: ^2.1.3
   path: ^1.9.0
   file: ^7.0.0
 
-
   permission_handler: ^11.3.1
   file_picker: ^8.1.6
-  path_provider: ^2.1.3
   mime: ^1.0.5
 
 dev_dependencies:

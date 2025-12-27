@@ -449,46 +449,58 @@ String _getVideoInsights(String emotion) {
     }
   }
 
-  /// Start audio recording
-  Future<void> startAudioRecording() async {
-    try {
-      final bool started = await _audioVideoService.startAudioRecording();
-      isRecordingAudio.value = started;
+ /// Start audio recording
+Future<void> startAudioRecording() async {
+  try {
+    final bool started = await _audioVideoService.startAudioRecording();
+    isRecordingAudio.value = started;
 
-      if (started) {
-        // Start timer to update recording duration
-        _startRecordingTimer();
-      }
-    } catch (e) {
+    if (started) {
+      // Start timer to update recording duration
+      _startRecordingTimer();
+      
+      // Show recording UI
       Get.snackbar(
-        'Error',
-        'Failed to start recording: ${e.toString()}',
-        backgroundColor: Colors.red,
+        '🎤 Recording Started',
+        'Recording in WAV format... Speak clearly',
+        backgroundColor: Colors.blue,
         colorText: Colors.white,
+        duration: const Duration(seconds: 3),
       );
     }
+  } catch (e) {
+    Get.snackbar(
+      'Error',
+      'Failed to start recording: ${e.toString()}',
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+    );
   }
+}
 
-  /// Stop audio recording
-  Future<void> stopAudioRecording() async {
-    try {
-      final File? audio = await _audioVideoService.stopAudioRecording();
-      isRecordingAudio.value = false;
-      recordingDuration.value = 0;
+/// Stop audio recording
+Future<void> stopAudioRecording() async {
+  try {
+    final File? audio = await _audioVideoService.stopAudioRecording();
+    isRecordingAudio.value = false;
+    recordingDuration.value = 0;
 
-      if (audio != null) {
-        selectedAudio.value = audio;
-        await _processSelectedAudio(audio);
-      }
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to stop recording: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+    if (audio != null) {
+      selectedAudio.value = audio;
+      
+      // Process immediately since we have a valid WAV file
+      await _processSelectedAudio(audio);
     }
+  } catch (e) {
+    Get.snackbar(
+      'Error',
+      'Failed to stop recording: ${e.toString()}',
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+    );
   }
+}
+
 
   /// Pick audio file from storage
   Future<void> pickAudioFile() async {
@@ -580,85 +592,162 @@ String _getVideoInsights(String emotion) {
     }
   }
 
-  /// Process selected audio
-  Future<void> _processSelectedAudio(File audio) async {
-    showUploadNotification.value = true;
-    uploadStatus.value = 'Analyzing voice emotions...';
-    isUploadingImage.value = true;
-    uploadProgress.value = 0.0;
+ /// Process selected audio (WAV format)
+Future<void> _processSelectedAudio(File audio) async {
+  showUploadNotification.value = true;
+  uploadStatus.value = 'Processing WAV audio...';
+  isUploadingImage.value = true;
+  uploadProgress.value = 0.0;
 
-    try {
-      uploadProgress.value = 0.3;
+  try {
+    // Get audio info
+    final audioInfo = _audioVideoService.getFileInfo(audio);
+    final fileName = audioInfo['fileName'];
+    final fileSize = audioInfo['fileSizeFormatted'];
 
-      // Get audio info
-      final audioInfo = _audioVideoService.getFileInfo(audio);
-      final fileName = audioInfo['fileName'];
-      final fileSize = audioInfo['fileSizeFormatted'];
+    // Add placeholder message
+    final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
+    messages.add('You: 🎤 Processing "$fileName" ($fileSize)... [ID: $placeholderId]');
 
-      uploadProgress.value = 0.6;
-      uploadStatus.value = 'Processing audio emotions...';
+    uploadProgress.value = 0.3;
+    uploadStatus.value = 'Converting to proper format...';
 
-      // Analyze audio
-      final result = await _mediaService.analyzeVoice(audio);
+    // Check if it's WAV, if not show warning but proceed
+    if (!fileName.toLowerCase().endsWith('.wav')) {
+      uploadStatus.value = 'Converting audio to WAV...';
+      messages.add('System: ⚠️ Converting audio to WAV format for analysis...');
+    }
 
-      uploadProgress.value = 1.0;
-      uploadStatus.value = 'Adding results to chat...';
+    uploadProgress.value = 0.6;
+    uploadStatus.value = 'Analyzing emotions from audio...';
 
-      String emotionResult = 'No emotion analysis available';
+    // Analyze audio
+    final result = await _mediaService.analyzeVoice(audio);
 
-      if (result.success) {
-        final voiceData = result.data!;
+    uploadProgress.value = 1.0;
+    uploadStatus.value = 'Adding results to chat...';
 
-        if (voiceData.error != null) {
-          emotionResult = 'Audio Error: ${voiceData.error}';
-        } else if (voiceData.emotion != null) {
-          emotionResult = 'Voice Analysis:\n';
-          emotionResult += 'Detected Emotion: ${voiceData.emotion}\n';
+    String emotionResult = 'No emotion analysis available';
 
-          if (voiceData.probabilities != null &&
-              voiceData.probabilities!.isNotEmpty) {
-            emotionResult += 'Emotion Probabilities:\n';
-            voiceData.probabilities!.forEach((emotion, probability) {
-              emotionResult +=
-                  '  • $emotion: ${(probability * 100).toStringAsFixed(1)}%\n';
-            });
-          }
-        } else {
-          emotionResult = 'No emotion detected in audio';
-        }
-      } else {
-        emotionResult = 'Voice analysis failed: ${result.message}';
+    if (result.success) {
+      final voiceData = result.data!;
+      emotionResult = _formatVoiceAnalysis(voiceData);
+      
+      // Replace placeholder with actual result
+      final index = messages.indexWhere((msg) => msg.contains(placeholderId));
+      if (index != -1) {
+        messages[index] = 'You: 🎤 **Audio Analysis:** "$fileName" ($fileSize)\n\n$emotionResult';
       }
-
-      // Add message to chat
-      messages.add('You: 🎤 Audio: $fileName ($fileSize)\n$emotionResult');
+      
+      // Add AI response based on detected emotion
+      await Future.delayed(const Duration(seconds: 1));
+      _addVoiceEmotionResponse(voiceData);
+      
       _saveCurrentConversation();
 
       // Show success
       showUploadNotification.value = false;
       Get.snackbar(
-        '✅ Voice Analyzed',
-        'Emotion analysis complete!',
+        '✅ Voice Analysis Complete',
+        'Emotion detected from audio!',
         backgroundColor: Colors.green,
         colorText: Colors.white,
         duration: const Duration(seconds: 3),
         snackPosition: SnackPosition.TOP,
       );
-    } catch (e) {
+    } else {
+      // Replace placeholder with error
+      final index = messages.indexWhere((msg) => msg.contains(placeholderId));
+      if (index != -1) {
+        messages[index] = 'You: 🎤 **Failed to analyze audio:** "$fileName"\nError: ${result.message}';
+      }
+      
       showUploadNotification.value = false;
       Get.snackbar(
-        'Error',
-        'Failed to analyze audio: ${e.toString()}',
+        '❌ Analysis Failed',
+        result.message ?? 'Could not analyze audio',
         backgroundColor: Colors.red,
         colorText: Colors.white,
+        duration: const Duration(seconds: 3),
       );
-    } finally {
-      isUploadingImage.value = false;
-      uploadProgress.value = 0.0;
-      selectedAudio.value = null;
-      uploadStatus.value = '';
     }
+  } catch (e) {
+    print('💥 [ChatVM] Audio processing error: $e');
+    
+    showUploadNotification.value = false;
+    Get.snackbar(
+      'Error',
+      'Failed to process audio: ${e.toString()}',
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+    );
+  } finally {
+    isUploadingImage.value = false;
+    uploadProgress.value = 0.0;
+    selectedAudio.value = null;
+    uploadStatus.value = '';
+    
+    Future.delayed(const Duration(milliseconds: 500), () {
+      showUploadNotification.value = false;
+    });
   }
+}
+
+/// Add AI response for voice emotion
+void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
+  if (voiceData.error != null) {
+    messages.add('EmoAssist: I couldn\'t analyze the audio properly. '
+        'Please try recording again with clear speech and minimal background noise.');
+    return;
+  }
+
+  if (voiceData.emotion == null) {
+    messages.add('EmoAssist: I couldn\'t detect any clear emotion in the audio. '
+        'Try speaking more clearly or with more emotional expression.');
+    return;
+  }
+
+  final emotion = voiceData.emotion!.toLowerCase();
+  String response = '';
+
+  switch (emotion) {
+    case 'happy':
+      response = 'I can hear the happiness in your voice! 😊 '
+          'Your tone sounds bright and energetic. Would you like to share what\'s making you happy?';
+      break;
+    case 'sad':
+      response = 'I sense sadness in your voice. 😢 '
+          'Your tone sounds softer and slower. It\'s okay to feel this way. '
+          'Would talking about it help?';
+      break;
+    case 'angry':
+      response = 'I can hear frustration or anger in your voice. 😠 '
+          'The intensity in your tone suggests strong feelings. '
+          'Take a deep breath - would you like to talk about what\'s bothering you?';
+      break;
+    case 'fear':
+      response = 'I detect anxiety or fear in your voice. 😨 '
+          'Your speech patterns suggest some nervousness. '
+          'Remember, you\'re safe here. What\'s causing these feelings?';
+      break;
+    case 'surprise':
+      response = 'Surprise detected in your voice! 😲 '
+          'Your tone has that excited, surprised quality. '
+          'Did something unexpected happen?';
+      break;
+    case 'neutral':
+      response = 'Your voice sounds neutral. 😐 '
+          'Sometimes our voices don\'t show what we\'re feeling inside. '
+          'How are you really feeling right now?';
+      break;
+    default:
+      response = 'Thank you for sharing your voice with me. '
+          'Voice analysis is complete. How does hearing these results make you feel?';
+  }
+
+  messages.add('EmoAssist: $response');
+}
 
   /// Start recording timer
   void _startRecordingTimer() {
