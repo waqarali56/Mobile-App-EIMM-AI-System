@@ -91,15 +91,6 @@ class ApiClient {
     'Accept': 'application/json',
   };
 
-  /// Base URL for main .NET backend
-  String get baseUrl => AppConfig.baseUrl;
-
-  /// Base URL for model 1 (voice, image, video)
-  String get modelBaseUrl1 => AppConfig.modelBaseUrl1;
-
-  /// Base URL for model 2 (text)
-  String get modelBaseUrl2 => AppConfig.modelBaseUrl2;
-
   /// Set authentication token
   void setAuthToken(String token) {
     _authToken = token;
@@ -223,14 +214,14 @@ class ApiClient {
   /// Generic GET request with custom base URL
   Future<ApiResponse<T>> get<T>(
     String endpoint, {
-    String baseUrl = '',
+    String? baseUrlOverride,
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
     T Function(Map<String, dynamic>)? fromJson,
     Duration? timeout,
   }) async {
     try {
-      final url = _buildUrl(endpoint, baseUrl);
+      final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
       Uri uri = Uri.parse(url);
 
       if (queryParameters != null && queryParameters.isNotEmpty) {
@@ -256,7 +247,7 @@ class ApiClient {
   /// Generic POST request with custom base URL
   Future<ApiResponse<T>> post<T>(
     String endpoint, {
-    String baseUrl = '',
+    String? baseUrlOverride,
     Map<String, dynamic>? body,
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
@@ -264,7 +255,7 @@ class ApiClient {
     Duration? timeout,
   }) async {
     try {
-      final url = _buildUrl(endpoint, baseUrl);
+      final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
       Uri uri = Uri.parse(url);
 
       if (queryParameters != null && queryParameters.isNotEmpty) {
@@ -299,37 +290,68 @@ class ApiClient {
     }
   }
 
-  /// Build URL with appropriate base URL
-  String _buildUrl(String endpoint, String customBaseUrl) {
+  /// Build URL with appropriate base URL based on endpoint type
+  String _buildUrl(String endpoint, {String? baseUrlOverride}) {
     print('🔄 [API] _buildUrl called with:');
     print('   endpoint: "$endpoint"');
-    print('   customBaseUrl: "$customBaseUrl"');
+    print('   baseUrlOverride: "$baseUrlOverride"');
 
-    if (customBaseUrl.isNotEmpty) {
-      final url = customBaseUrl + endpoint;
-      print('   ➡️ Using customBaseUrl: $url');
+    // Use override if provided
+    if (baseUrlOverride != null && baseUrlOverride.isNotEmpty) {
+      final url = _ensureUrlFormat(baseUrlOverride, endpoint);
+      print('   ➡️ Using baseUrlOverride: $url');
       return url;
     }
+
+    String baseUrl;
+    String serviceName;
 
     // Determine which base URL to use based on endpoint
-    if (endpoint.startsWith('/predict/')) {
-      final url = modelBaseUrl1 + endpoint;
-      print('   ➡️ Using modelBaseUrl1: $url');
-      return url;
-    } else if (endpoint.startsWith('/predict_text')) {
-      final url = modelBaseUrl2 + endpoint;
-      print('   ➡️ Using modelBaseUrl2: $url');
-      return url;
+    if (endpoint.contains('/predict/image') ||
+        endpoint.contains('/predict/video')) {
+      baseUrl = AppConfig.imageVideoModelUrl;
+      serviceName = 'Image/Video Model';
+    } else if (endpoint.contains('/predict_text')) {
+      baseUrl = AppConfig.textModelUrl;
+      serviceName = 'Text Model';
+    } else if (endpoint.contains('/predict/voice') ||
+        endpoint.contains('/predict/audio') ||
+        endpoint.contains('/emotion/voice') ||
+        endpoint.contains('/emotion/audio') ||
+        endpoint.contains('/analyze_voice') ||
+        endpoint.contains('/predict_speech')) {
+      baseUrl = AppConfig.voiceModelUrl;
+      serviceName = 'Voice Model';
     } else {
-      final url = endpoint;
-      print('   ➡️ Using main baseUrl: $url');
-      return url;
+      // For auth and other endpoints, use main backend URL
+      baseUrl = AppConfig.baseUrl;
+      serviceName = 'Main Backend';
     }
+
+    final url = _ensureUrlFormat(baseUrl, endpoint);
+    print('   ➡️ Using $serviceName: $url');
+    return url;
   }
 
+  /// Ensure proper URL format (handles trailing/leading slashes)
+  String _ensureUrlFormat(String baseUrl, String endpoint) {
+    // Remove trailing slash from baseUrl if present
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+
+    // Remove leading slash from endpoint if present
+    if (endpoint.startsWith('/')) {
+      endpoint = endpoint.substring(1);
+    }
+
+    return '$baseUrl/$endpoint';
+  }
+
+  /// Multipart POST for file uploads
   Future<ApiResponse<T>> multipartPost<T>(
     String endpoint, {
-    String baseUrl = '',
+    String? baseUrlOverride,
     List<http.MultipartFile>? files,
     Map<String, String>? fields,
     required T Function(Map<String, dynamic>) fromJson,
@@ -338,13 +360,14 @@ class ApiClient {
   }) async {
     try {
       print('🚀 [API] Starting multipart POST to: $endpoint');
-      final url = _buildUrl(endpoint, baseUrl);
+      final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
       print('🔗 [API] Full URL: $url');
       final uri = Uri.parse(url);
 
       final request = http.MultipartRequest('POST', uri);
       final requestHeaders = _getHeaders(headers);
-      requestHeaders.remove('Content-Type');
+      requestHeaders
+          .remove('Content-Type'); // Let multipart set its own content-type
       request.headers.addAll({
         'accept': 'application/json',
         ...requestHeaders,
@@ -383,7 +406,6 @@ class ApiClient {
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
       print('❌ [API] multipartPost error: $e');
-      // For stack trace, we need to handle it differently
       if (e is Error) {
         print('🧵 [API] Stack trace: ${e.stackTrace}');
       }
@@ -446,6 +468,10 @@ class ApiClient {
         return 'audio/mpeg';
       case 'm4a':
         return 'audio/x-m4a';
+      case 'aac':
+        return 'audio/aac';
+      case 'flac':
+        return 'audio/flac';
       default:
         return null;
     }
@@ -454,13 +480,15 @@ class ApiClient {
   /// Generic PUT request
   Future<ApiResponse<T>> put<T>(
     String endpoint, {
+    String? baseUrlOverride,
     Map<String, dynamic>? body,
     Map<String, String>? headers,
     T Function(Map<String, dynamic>)? fromJson,
     Duration? timeout,
   }) async {
     try {
-      final uri = Uri.parse(endpoint);
+      final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
+      final uri = Uri.parse(url);
       final response = await _client
           .put(
             uri,
@@ -484,13 +512,15 @@ class ApiClient {
   /// Generic PATCH request
   Future<ApiResponse<T>> patch<T>(
     String endpoint, {
+    String? baseUrlOverride,
     Map<String, dynamic>? body,
     Map<String, String>? headers,
     T Function(Map<String, dynamic>)? fromJson,
     Duration? timeout,
   }) async {
     try {
-      final uri = Uri.parse(endpoint);
+      final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
+      final uri = Uri.parse(url);
       final response = await _client
           .patch(
             uri,
@@ -514,12 +544,14 @@ class ApiClient {
   /// Generic DELETE request
   Future<ApiResponse<T>> delete<T>(
     String endpoint, {
+    String? baseUrlOverride,
     Map<String, String>? headers,
     T Function(Map<String, dynamic>)? fromJson,
     Duration? timeout,
   }) async {
     try {
-      final uri = Uri.parse(endpoint);
+      final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
+      final uri = Uri.parse(url);
       final response = await _client
           .delete(uri, headers: _getHeaders(headers))
           .timeout(timeout ?? AppConfig.defaultTimeout);
@@ -538,7 +570,6 @@ class ApiClient {
 
   /// Refresh access token
   Future<ApiResponse<Map<String, dynamic>>> refreshAccessToken() async {
-    // Renamed to avoid conflict
     if (_refreshToken == null || _authToken == null) {
       return ApiResponse.error('No refresh token available');
     }
@@ -574,7 +605,7 @@ class ApiClient {
   Future<bool> checkConnectivity() async {
     try {
       final response = await _client
-          .get(Uri.parse(API.healthCheck))
+          .get(Uri.parse('${AppConfig.baseUrl}/auth/health-check'))
           .timeout(const Duration(seconds: 10));
       return response.statusCode == 200;
     } catch (e) {
@@ -659,7 +690,7 @@ extension ApiClientExtensions on ApiClient {
   ) {
     return post<Map<String, dynamic>>(
       API.resendOTP,
-      queryParameters: {
+      body: {
         'email': email,
         'type': type.toString().split('.').last,
       },

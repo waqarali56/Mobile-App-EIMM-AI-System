@@ -17,29 +17,36 @@ class AppConfig {
     }
   }
 
-  // Model URLs for voice, image, video (Port 8000)
-  static String get modelBaseUrl1 {
+  // Model URLs for different services
+  static String get imageVideoModelUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://182.180.159.89:8002';
+        return 'http://182.180.159.89:8002'; // Image/Video port
       case Environment.production:
-        return 'https://your-model1-production-domain';
+        return 'https://your-image-video-production-domain';
     }
   }
 
-  // Model URL for text (Port 8001)
-  static String get modelBaseUrl2 {
+  static String get textModelUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://182.180.159.89:8001';
+        return 'http://182.180.159.89:8001'; // Text port
       case Environment.production:
-        return 'https://your-model2-production-domain';
+        return 'https://your-text-production-domain';
+    }
+  }
+
+  static String get voiceModelUrl {
+    switch (_currentEnvironment) {
+      case Environment.development:
+        return 'http://182.180.159.89:8000'; // Voice port
+      case Environment.production:
+        return 'https://your-voice-production-domain';
     }
   }
 
   static bool get isProduction => _currentEnvironment == Environment.production;
-  static bool get isDevelopment =>
-      _currentEnvironment == Environment.development;
+  static bool get isDevelopment => _currentEnvironment == Environment.development;
 
   // API Configuration
   static const Duration defaultTimeout = Duration(seconds: 30);
@@ -59,8 +66,9 @@ class AppConfig {
     return {
       'environment': _currentEnvironment.name,
       'baseUrl': baseUrl,
-      'modelBaseUrl1': modelBaseUrl1,
-      'modelBaseUrl2': modelBaseUrl2,
+      'imageVideoModelUrl': imageVideoModelUrl,
+      'textModelUrl': textModelUrl,
+      'voiceModelUrl': voiceModelUrl,
       'isProduction': isProduction,
       'isDevelopment': isDevelopment,
       'enableLogging': enableLogging,

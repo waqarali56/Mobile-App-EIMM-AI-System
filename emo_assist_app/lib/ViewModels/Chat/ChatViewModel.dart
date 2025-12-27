@@ -81,7 +81,7 @@ class ChatViewModel extends GetxController {
     showMultiModalOptions.value = value;
   }
 
-  /// Send message with text emotion analysis
+  /// Send message with text emotion analysis (updated)
   void sendMessage(String message) async {
     if (message.trim().isEmpty) return;
 
@@ -102,18 +102,16 @@ class ChatViewModel extends GetxController {
         // Update emotion scores based on API response
         _updateEmotionScoresFromAPI(emotionData);
 
+        // Add emotion analysis details as a formatted message
+        final emotionDetails = _formatEmotionDetails(emotionData);
+        messages.add('System: $emotionDetails');
+
         // Generate response based on detected emotion
         final response = _generateResponseFromEmotion(message, emotionData);
 
-        // Add AI response
-        await Future.delayed(const Duration(seconds: 1));
+        // Add AI response after a short delay
+        await Future.delayed(const Duration(seconds: 2));
         messages.add('EmoAssist: $response');
-
-        // Add emotion analysis details as a system message
-        if (emotionData.finalEmotion != 'context unclear') {
-          final emotionDetails = _formatEmotionDetails(emotionData);
-          messages.add('System: 📊 $emotionDetails');
-        }
 
         // Update conversation preview
         _updateConversationPreview(message, response);
@@ -141,263 +139,318 @@ class ChatViewModel extends GetxController {
   }
 
   /// Format image analysis for display
-String _formatImageAnalysis(ImageEmotionData emotionData) {
-  String result = '📸 **Image Analysis Results**\n\n';
-  
-  if (emotionData.facesDetected == 0) {
-    result += 'No faces detected in the image.\n';
-    result += 'Please upload an image with a clear face for emotion analysis.';
-  } else if (emotionData.facesDetected == 1) {
-    final emotion = emotionData.results.first;
-    result += '✅ **Face Detected**\n';
-    result += '**Primary Emotion:** ${_capitalizeFirst(emotion.emotion)}\n';
-    result += '**Confidence:** ${(emotion.confidence * 100).toStringAsFixed(1)}%\n\n';
-    
-    if (emotion.probabilities.isNotEmpty) {
-      result += '**Detailed Analysis:**\n';
-      
-      // Sort probabilities by value (highest first)
-      final sortedEntries = emotion.probabilities.entries.toList()
+  String _formatImageAnalysis(ImageEmotionData emotionData) {
+    String result = '📸 **Image Analysis Results**\n\n';
+
+    if (emotionData.facesDetected == 0) {
+      result += 'No faces detected in the image.\n';
+      result +=
+          'Please upload an image with a clear face for emotion analysis.';
+    } else if (emotionData.facesDetected == 1) {
+      final emotion = emotionData.results.first;
+      result += '✅ **Face Detected**\n';
+      result += '**Primary Emotion:** ${_capitalizeFirst(emotion.emotion)}\n';
+      result +=
+          '**Confidence:** ${(emotion.confidence * 100).toStringAsFixed(1)}%\n\n';
+
+      if (emotion.probabilities.isNotEmpty) {
+        result += '**Detailed Analysis:**\n';
+
+        // Sort probabilities by value (highest first)
+        final sortedEntries = emotion.probabilities.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+
+        for (var entry in sortedEntries) {
+          final percentage = (entry.value * 100).toStringAsFixed(1);
+          result += '• ${_capitalizeFirst(entry.key)}: $percentage%\n';
+        }
+      }
+
+      // Add emoji based on emotion
+      result +=
+          '\n${_getEmotionEmoji(emotion.emotion)} ${_getEmotionMessage(emotion.emotion)}';
+    } else {
+      result += '👥 **${emotionData.facesDetected} Faces Detected**\n\n';
+
+      for (var i = 0; i < emotionData.results.length; i++) {
+        final emotion = emotionData.results[i];
+        result += '**Face ${i + 1}:**\n';
+        result += '  Emotion: ${_capitalizeFirst(emotion.emotion)}\n';
+        result +=
+            '  Confidence: ${(emotion.confidence * 100).toStringAsFixed(1)}%\n';
+
+        // Show top 2 emotions for each face
+        if (emotion.probabilities.isNotEmpty) {
+          final sortedEntries = emotion.probabilities.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value))
+            ..take(2);
+
+          if (sortedEntries.length > 1) {
+            result += '  Top emotions: ';
+            for (var j = 0; j < min(2, sortedEntries.length); j++) {
+              final entry = sortedEntries[j];
+              final percentage = (entry.value * 100).toStringAsFixed(1);
+              result += '${_capitalizeFirst(entry.key)} ($percentage%)';
+              if (j < min(2, sortedEntries.length) - 1) result += ', ';
+            }
+            result += '\n';
+          }
+        }
+        result += '\n';
+      }
+    }
+
+    return result;
+  }
+
+  /// Format voice analysis for display
+  String _formatVoiceAnalysis(VoiceEmotionData voiceData) {
+    String result = '🎤 **Voice Analysis Results**\n\n';
+
+    if (voiceData.error != null) {
+      result += '❌ **Error:** ${voiceData.error}\n';
+      result += 'Please try recording again or upload a different audio file.';
+    } else if (voiceData.emotion != null) {
+      result += '✅ **Analysis Complete**\n';
+      result +=
+          '**Detected Emotion:** ${_capitalizeFirst(voiceData.emotion!)}\n\n';
+
+      if (voiceData.probabilities != null &&
+          voiceData.probabilities!.isNotEmpty) {
+        result += '**Emotion Breakdown:**\n';
+
+        // Sort probabilities by value
+        final sortedEntries = voiceData.probabilities!.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+
+        for (var entry in sortedEntries) {
+          final percentage = (entry.value * 100).toStringAsFixed(1);
+          result += '• ${_capitalizeFirst(entry.key)}: $percentage%\n';
+        }
+      }
+
+      // Add vocal characteristic insights
+      result += '\n🎵 **Vocal Characteristics:**\n';
+      result += _getVoiceInsights(voiceData.emotion!);
+    } else {
+      result += 'No emotion detected in the audio.\n';
+      result +=
+          'Please try speaking more clearly or upload a different recording.';
+    }
+
+    return result;
+  }
+
+  /// Format video analysis for display
+  String _formatVideoAnalysis(VideoEmotionData videoData) {
+    String result = '🎬 **Video Analysis Results**\n\n';
+
+    result += '✅ **Analysis Complete**\n';
+    result +=
+        '**Overall Emotion:** ${_capitalizeFirst(videoData.finalEmotion)}\n\n';
+
+    if (videoData.finalProbabilities.isNotEmpty) {
+      result += '**Emotion Timeline Analysis:**\n';
+
+      // Sort probabilities by value
+      final sortedEntries = videoData.finalProbabilities.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
-      
+
       for (var entry in sortedEntries) {
         final percentage = (entry.value * 100).toStringAsFixed(1);
         result += '• ${_capitalizeFirst(entry.key)}: $percentage%\n';
       }
     }
-    
-    // Add emoji based on emotion
-    result += '\n${_getEmotionEmoji(emotion.emotion)} ${_getEmotionMessage(emotion.emotion)}';
-  } else {
-    result += '👥 **${emotionData.facesDetected} Faces Detected**\n\n';
-    
-    for (var i = 0; i < emotionData.results.length; i++) {
-      final emotion = emotionData.results[i];
-      result += '**Face ${i + 1}:**\n';
-      result += '  Emotion: ${_capitalizeFirst(emotion.emotion)}\n';
-      result += '  Confidence: ${(emotion.confidence * 100).toStringAsFixed(1)}%\n';
-      
-      // Show top 2 emotions for each face
-      if (emotion.probabilities.isNotEmpty) {
-        final sortedEntries = emotion.probabilities.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value))
-          ..take(2);
-        
-        if (sortedEntries.length > 1) {
-          result += '  Top emotions: ';
+
+    // Add interpretation
+    result += '\n📊 **Interpretation:**\n';
+    result += _getVideoInsights(videoData.finalEmotion);
+
+    return result;
+  }
+
+  /// Helper methods
+  /// Capitalize helper (unchanged but ensure it handles API labels)
+  String _capitalizeFirst(String text) {
+    if (text.isEmpty) return text;
+
+    // Handle API labels
+    final lowerText = text.toLowerCase();
+    if (lowerText == 'suprise') {
+      return 'Surprise'; // Fix API typo
+    }
+
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  /// Get emoji for emotion (updated for API labels)
+  String _getEmotionEmoji(String emotion) {
+    final lowerEmotion = emotion.toLowerCase();
+
+    switch (lowerEmotion) {
+      case 'joy':
+        return '😊';
+      case 'sad':
+        return '😢';
+      case 'anger':
+        return '😠';
+      case 'surprise':
+        return '😲';
+      case 'suprise':
+        return '😲'; // Handle API typo
+      case 'fear':
+        return '😨';
+      case 'love':
+        return '❤️';
+      case 'neutral':
+        return '😐';
+      default:
+        return '🤔';
+    }
+  }
+
+  String _getEmotionMessage(String emotion) {
+    switch (emotion.toLowerCase()) {
+      case 'happy':
+        return 'I see happiness in this image! Keep smiling!';
+      case 'sad':
+        return 'I detect sadness. It\'s okay to feel this way sometimes.';
+      case 'angry':
+        return 'I sense anger. Taking deep breaths can help.';
+      case 'surprise':
+        return 'Surprise detected! Something unexpected?';
+      case 'fear':
+        return 'I see fear. Remember, you\'re safe here.';
+      case 'neutral':
+        return 'Neutral expression detected. How are you really feeling?';
+      default:
+        return 'Emotion analysis complete.';
+    }
+  }
+
+  String _getVoiceInsights(String emotion) {
+    switch (emotion.toLowerCase()) {
+      case 'happy':
+        return '• Bright, energetic tone\n• Higher pitch variations\n• Faster speech rate';
+      case 'sad':
+        return '• Slower speech rate\n• Lower pitch\n• Softer volume';
+      case 'angry':
+        return '• Louder volume\n• Sharper tone\n• Faster speech with pauses';
+      case 'neutral':
+        return '• Steady pace\n• Moderate pitch\n• Consistent volume';
+      default:
+        return '• Unique vocal patterns detected';
+    }
+  }
+
+  String _getVideoInsights(String emotion) {
+    switch (emotion.toLowerCase()) {
+      case 'happy':
+        return 'The video shows predominantly happy expressions. Smiles and positive facial cues were detected throughout.';
+      case 'sad':
+        return 'The analysis indicates moments of sadness. Facial expressions show signs of emotional distress.';
+      case 'angry':
+        return 'Angry expressions were detected. There are visible signs of frustration or irritation.';
+      case 'neutral':
+        return 'Mostly neutral expressions detected. Emotional variance was minimal throughout the video.';
+      default:
+        return 'Mixed emotional expressions detected throughout the video timeline.';
+    }
+  }
+
+  /// Format emotion details for display (updated for API labels)
+  String _formatEmotionDetails(TextEmotionData emotionData) {
+    String details = '📊 **Text Emotion Analysis Results**\n\n';
+    details += '✅ **Analysis Complete**\n';
+    details +=
+        '**Overall Emotion:** ${_capitalizeFirst(emotionData.finalEmotion)}\n\n';
+
+    // Show sentence-by-sentence analysis
+    if (emotionData.sentences.isNotEmpty) {
+      details += '**Sentence Analysis:**\n';
+      for (var i = 0; i < emotionData.sentences.length; i++) {
+        final sentence = emotionData.sentences[i];
+        details += '${i + 1}. "${sentence.sentence}"\n';
+        details += '   → Emotion: ${_capitalizeFirst(sentence.emotion)}\n';
+
+        // Show top 2 probabilities for each sentence
+        if (sentence.probabilities.isNotEmpty) {
+          final sortedEntries = sentence.probabilities.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+
+          details += '   → Top emotions: ';
           for (var j = 0; j < min(2, sortedEntries.length); j++) {
             final entry = sortedEntries[j];
             final percentage = (entry.value * 100).toStringAsFixed(1);
-            result += '${_capitalizeFirst(entry.key)} ($percentage%)';
-            if (j < min(2, sortedEntries.length) - 1) result += ', ';
+            details += '${_capitalizeFirst(entry.key)} ($percentage%)';
+            if (j < min(2, sortedEntries.length) - 1) details += ', ';
           }
-          result += '\n';
+          details += '\n';
         }
+        details += '\n';
       }
-      result += '\n';
     }
-  }
-  
-  return result;
-}
 
-/// Format voice analysis for display
-String _formatVoiceAnalysis(VoiceEmotionData voiceData) {
-  String result = '🎤 **Voice Analysis Results**\n\n';
-  
-  if (voiceData.error != null) {
-    result += '❌ **Error:** ${voiceData.error}\n';
-    result += 'Please try recording again or upload a different audio file.';
-  } else if (voiceData.emotion != null) {
-    result += '✅ **Analysis Complete**\n';
-    result += '**Detected Emotion:** ${_capitalizeFirst(voiceData.emotion!)}\n\n';
-    
-    if (voiceData.probabilities != null && voiceData.probabilities!.isNotEmpty) {
-      result += '**Emotion Breakdown:**\n';
-      
-      // Sort probabilities by value
-      final sortedEntries = voiceData.probabilities!.entries.toList()
+    // Show weighted probabilities
+    if (emotionData.weightedProbabilities.isNotEmpty) {
+      details += '**Emotion Confidence Levels:**\n';
+
+      // Sort by probability (highest first)
+      final sortedEntries = emotionData.weightedProbabilities.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
-      
+
       for (var entry in sortedEntries) {
         final percentage = (entry.value * 100).toStringAsFixed(1);
-        result += '• ${_capitalizeFirst(entry.key)}: $percentage%\n';
+        final emoji = _getEmotionEmoji(entry.key);
+        details += '• $emoji ${_capitalizeFirst(entry.key)}: $percentage%\n';
       }
     }
-    
-    // Add vocal characteristic insights
-    result += '\n🎵 **Vocal Characteristics:**\n';
-    result += _getVoiceInsights(voiceData.emotion!);
-  } else {
-    result += 'No emotion detected in the audio.\n';
-    result += 'Please try speaking more clearly or upload a different recording.';
-  }
-  
-  return result;
-}
 
-/// Format video analysis for display
-String _formatVideoAnalysis(VideoEmotionData videoData) {
-  String result = '🎬 **Video Analysis Results**\n\n';
-  
-  result += '✅ **Analysis Complete**\n';
-  result += '**Overall Emotion:** ${_capitalizeFirst(videoData.finalEmotion)}\n\n';
-  
-  if (videoData.finalProbabilities.isNotEmpty) {
-    result += '**Emotion Timeline Analysis:**\n';
-    
-    // Sort probabilities by value
-    final sortedEntries = videoData.finalProbabilities.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    
-    for (var entry in sortedEntries) {
-      final percentage = (entry.value * 100).toStringAsFixed(1);
-      result += '• ${_capitalizeFirst(entry.key)}: $percentage%\n';
-    }
-  }
-  
-  // Add interpretation
-  result += '\n📊 **Interpretation:**\n';
-  result += _getVideoInsights(videoData.finalEmotion);
-  
-  return result;
-}
-
-/// Helper methods
-String _capitalizeFirst(String text) {
-  if (text.isEmpty) return text;
-  return text[0].toUpperCase() + text.substring(1);
-}
-
-String _getEmotionEmoji(String emotion) {
-  switch (emotion.toLowerCase()) {
-    case 'happy':
-      return '😊';
-    case 'sad':
-      return '😢';
-    case 'angry':
-      return '😠';
-    case 'surprise':
-      return '😲';
-    case 'fear':
-      return '😨';
-    case 'disgust':
-      return '🤢';
-    case 'neutral':
-      return '😐';
-    default:
-      return '🤔';
-  }
-}
-
-String _getEmotionMessage(String emotion) {
-  switch (emotion.toLowerCase()) {
-    case 'happy':
-      return 'I see happiness in this image! Keep smiling!';
-    case 'sad':
-      return 'I detect sadness. It\'s okay to feel this way sometimes.';
-    case 'angry':
-      return 'I sense anger. Taking deep breaths can help.';
-    case 'surprise':
-      return 'Surprise detected! Something unexpected?';
-    case 'fear':
-      return 'I see fear. Remember, you\'re safe here.';
-    case 'neutral':
-      return 'Neutral expression detected. How are you really feeling?';
-    default:
-      return 'Emotion analysis complete.';
-  }
-}
-
-String _getVoiceInsights(String emotion) {
-  switch (emotion.toLowerCase()) {
-    case 'happy':
-      return '• Bright, energetic tone\n• Higher pitch variations\n• Faster speech rate';
-    case 'sad':
-      return '• Slower speech rate\n• Lower pitch\n• Softer volume';
-    case 'angry':
-      return '• Louder volume\n• Sharper tone\n• Faster speech with pauses';
-    case 'neutral':
-      return '• Steady pace\n• Moderate pitch\n• Consistent volume';
-    default:
-      return '• Unique vocal patterns detected';
-  }
-}
-
-String _getVideoInsights(String emotion) {
-  switch (emotion.toLowerCase()) {
-    case 'happy':
-      return 'The video shows predominantly happy expressions. Smiles and positive facial cues were detected throughout.';
-    case 'sad':
-      return 'The analysis indicates moments of sadness. Facial expressions show signs of emotional distress.';
-    case 'angry':
-      return 'Angry expressions were detected. There are visible signs of frustration or irritation.';
-    case 'neutral':
-      return 'Mostly neutral expressions detected. Emotional variance was minimal throughout the video.';
-    default:
-      return 'Mixed emotional expressions detected throughout the video timeline.';
-  }
-}
-
-  /// Update emotion scores based on API response
-  void _updateEmotionScoresFromAPI(TextEmotionData emotionData) {
-    // Map emotions to sentiment scores
-    final emotion = emotionData.finalEmotion.toLowerCase();
-
-    if (emotion.contains('happy') || emotion.contains('joy')) {
-      textSentimentScore.value = 0.85 + (DateTime.now().millisecond % 10) / 100;
-      currentEmotion.value = 'Positive Mood';
-    } else if (emotion.contains('sad') || emotion.contains('sadness')) {
-      textSentimentScore.value = 0.25 + (DateTime.now().millisecond % 15) / 100;
-      currentEmotion.value = 'Sadness Detected';
-    } else if (emotion.contains('angry') || emotion.contains('anger')) {
-      textSentimentScore.value = 0.20 + (DateTime.now().millisecond % 15) / 100;
-      currentEmotion.value = 'Anger Detected';
-    } else if (emotion.contains('fear') || emotion.contains('anxious')) {
-      textSentimentScore.value = 0.35 + (DateTime.now().millisecond % 20) / 100;
-      currentEmotion.value = 'Anxiety Detected';
-    } else if (emotion.contains('surprise')) {
-      textSentimentScore.value = 0.70 + (DateTime.now().millisecond % 15) / 100;
-      currentEmotion.value = 'Surprise Detected';
-    } else {
-      textSentimentScore.value = 0.60 + (DateTime.now().millisecond % 20) / 100;
-      currentEmotion.value = 'Neutral State';
-    }
-
-    // Update emotion tag
-    emotionTag.value = 'AI-Powered Analysis';
-  }
-
-  /// Format emotion details for display
-  String _formatEmotionDetails(TextEmotionData emotionData) {
-    String details = 'Emotion Analysis:\n';
-    details += 'Overall: ${emotionData.finalEmotion}\n';
-
-    if (emotionData.weightedProbabilities.isNotEmpty) {
-      details += 'Confidence:\n';
-      emotionData.weightedProbabilities.forEach((emotion, prob) {
-        details += '  • $emotion: ${(prob * 100).toStringAsFixed(1)}%\n';
-      });
-    }
+    // Add interpretation based on emotion
+    details += '\n**💡 Interpretation:**\n';
+    details += _getTextEmotionInsights(emotionData.finalEmotion);
 
     return details.trim();
   }
 
-  /// Generate response based on detected emotion
+  /// Helper method to get insights for text emotions
+  String _getTextEmotionInsights(String emotion) {
+    switch (emotion.toLowerCase()) {
+      case 'joy':
+        return 'Your text shows clear signs of happiness and positivity. This is reflected in your choice of words and sentence structure.';
+      case 'sad':
+        return 'Your writing suggests feelings of sadness or melancholy. The emotional tone is subdued and reflective.';
+      case 'anger':
+        return 'There\'s evidence of frustration or anger in your text. The language shows intensity and strong emotion.';
+      case 'fear':
+        return 'Your message indicates some anxiety or worry. The uncertainty in your writing is noticeable.';
+      case 'suprise':
+      case 'surprise':
+        return 'Your text has elements of surprise or unexpectedness. This creates an interesting emotional dynamic.';
+      case 'love':
+        return 'Your writing radiates warmth and affection. There\'s a positive, caring tone throughout.';
+      default:
+        return 'The emotional content of your text is complex and multifaceted.';
+    }
+  }
+
+  /// Generate response based on detected emotion (updated for API labels)
   String _generateResponseFromEmotion(
       String message, TextEmotionData emotionData) {
     final emotion = emotionData.finalEmotion.toLowerCase();
 
-    if (emotion.contains('happy') || emotion.contains('joy')) {
+    if (emotion == 'joy') {
       return 'I can sense the happiness in your message! 😊 That\'s wonderful to hear. What\'s bringing you joy today?';
-    } else if (emotion.contains('sad') || emotion.contains('sadness')) {
-      return 'I can tell you\'re feeling down right now. It\'s okay to feel this way. Would you like to talk about what\'s bothering you?';
-    } else if (emotion.contains('angry') || emotion.contains('anger')) {
-      return 'I sense some frustration in your words. It\'s natural to feel angry sometimes. Take a deep breath. Would you like to talk about what\'s upsetting you?';
-    } else if (emotion.contains('fear') || emotion.contains('anxious')) {
-      return 'I can feel the worry in your message. Anxiety can be overwhelming. Remember, you\'re not alone. Let\'s work through this together.';
-    } else if (emotion.contains('surprise')) {
-      return 'Something unexpected seems to have happened! Would you like to share more about it?';
+    } else if (emotion == 'sad') {
+      return 'I can tell you\'re feeling down right now. 😢 It\'s okay to feel this way. Would you like to talk about what\'s bothering you?';
+    } else if (emotion == 'anger') {
+      return 'I sense some frustration in your words. 😠 It\'s natural to feel angry sometimes. Take a deep breath. Would you like to talk about what\'s upsetting you?';
+    } else if (emotion == 'fear') {
+      return 'I can feel the worry in your message. 😨 Anxiety can be overwhelming. Remember, you\'re not alone. Let\'s work through this together.';
+    } else if (emotion == 'suprise' || emotion == 'surprise') {
+      return 'Something unexpected seems to have happened! 😲 Would you like to share more about it?';
+    } else if (emotion == 'love') {
+      return 'I can feel the warmth in your message! ❤️ That\'s beautiful. Would you like to share what you love about this?';
     } else if (emotion == 'context unclear') {
       return _generateResponse(message);
     } else {
@@ -449,58 +502,57 @@ String _getVideoInsights(String emotion) {
     }
   }
 
- /// Start audio recording
-Future<void> startAudioRecording() async {
-  try {
-    final bool started = await _audioVideoService.startAudioRecording();
-    isRecordingAudio.value = started;
+  /// Start audio recording
+  Future<void> startAudioRecording() async {
+    try {
+      final bool started = await _audioVideoService.startAudioRecording();
+      isRecordingAudio.value = started;
 
-    if (started) {
-      // Start timer to update recording duration
-      _startRecordingTimer();
-      
-      // Show recording UI
+      if (started) {
+        // Start timer to update recording duration
+        _startRecordingTimer();
+
+        // Show recording UI
+        Get.snackbar(
+          '🎤 Recording Started',
+          'Recording in WAV format... Speak clearly',
+          backgroundColor: Colors.blue,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
       Get.snackbar(
-        '🎤 Recording Started',
-        'Recording in WAV format... Speak clearly',
-        backgroundColor: Colors.blue,
+        'Error',
+        'Failed to start recording: ${e.toString()}',
+        backgroundColor: Colors.red,
         colorText: Colors.white,
-        duration: const Duration(seconds: 3),
       );
     }
-  } catch (e) {
-    Get.snackbar(
-      'Error',
-      'Failed to start recording: ${e.toString()}',
-      backgroundColor: Colors.red,
-      colorText: Colors.white,
-    );
   }
-}
 
-/// Stop audio recording
-Future<void> stopAudioRecording() async {
-  try {
-    final File? audio = await _audioVideoService.stopAudioRecording();
-    isRecordingAudio.value = false;
-    recordingDuration.value = 0;
+  /// Stop audio recording
+  Future<void> stopAudioRecording() async {
+    try {
+      final File? audio = await _audioVideoService.stopAudioRecording();
+      isRecordingAudio.value = false;
+      recordingDuration.value = 0;
 
-    if (audio != null) {
-      selectedAudio.value = audio;
-      
-      // Process immediately since we have a valid WAV file
-      await _processSelectedAudio(audio);
+      if (audio != null) {
+        selectedAudio.value = audio;
+
+        // Process immediately since we have a valid WAV file
+        await _processSelectedAudio(audio);
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to stop recording: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
-  } catch (e) {
-    Get.snackbar(
-      'Error',
-      'Failed to stop recording: ${e.toString()}',
-      backgroundColor: Colors.red,
-      colorText: Colors.white,
-    );
   }
-}
-
 
   /// Pick audio file from storage
   Future<void> pickAudioFile() async {
@@ -592,162 +644,167 @@ Future<void> stopAudioRecording() async {
     }
   }
 
- /// Process selected audio (WAV format)
-Future<void> _processSelectedAudio(File audio) async {
-  showUploadNotification.value = true;
-  uploadStatus.value = 'Processing WAV audio...';
-  isUploadingImage.value = true;
-  uploadProgress.value = 0.0;
+  /// Process selected audio (WAV format)
+  Future<void> _processSelectedAudio(File audio) async {
+    showUploadNotification.value = true;
+    uploadStatus.value = 'Processing WAV audio...';
+    isUploadingImage.value = true;
+    uploadProgress.value = 0.0;
 
-  try {
-    // Get audio info
-    final audioInfo = _audioVideoService.getFileInfo(audio);
-    final fileName = audioInfo['fileName'];
-    final fileSize = audioInfo['fileSizeFormatted'];
+    try {
+      // Get audio info
+      final audioInfo = _audioVideoService.getFileInfo(audio);
+      final fileName = audioInfo['fileName'];
+      final fileSize = audioInfo['fileSizeFormatted'];
 
-    // Add placeholder message
-    final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
-    messages.add('You: 🎤 Processing "$fileName" ($fileSize)... [ID: $placeholderId]');
+      // Add placeholder message
+      final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
+      messages.add(
+          'You: 🎤 Processing "$fileName" ($fileSize)... [ID: $placeholderId]');
 
-    uploadProgress.value = 0.3;
-    uploadStatus.value = 'Converting to proper format...';
+      uploadProgress.value = 0.3;
+      uploadStatus.value = 'Converting to proper format...';
 
-    // Check if it's WAV, if not show warning but proceed
-    if (!fileName.toLowerCase().endsWith('.wav')) {
-      uploadStatus.value = 'Converting audio to WAV...';
-      messages.add('System: ⚠️ Converting audio to WAV format for analysis...');
-    }
-
-    uploadProgress.value = 0.6;
-    uploadStatus.value = 'Analyzing emotions from audio...';
-
-    // Analyze audio
-    final result = await _mediaService.analyzeVoice(audio);
-
-    uploadProgress.value = 1.0;
-    uploadStatus.value = 'Adding results to chat...';
-
-    String emotionResult = 'No emotion analysis available';
-
-    if (result.success) {
-      final voiceData = result.data!;
-      emotionResult = _formatVoiceAnalysis(voiceData);
-      
-      // Replace placeholder with actual result
-      final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-      if (index != -1) {
-        messages[index] = 'You: 🎤 **Audio Analysis:** "$fileName" ($fileSize)\n\n$emotionResult';
+      // Check if it's WAV, if not show warning but proceed
+      if (!fileName.toLowerCase().endsWith('.wav')) {
+        uploadStatus.value = 'Converting audio to WAV...';
+        messages
+            .add('System: ⚠️ Converting audio to WAV format for analysis...');
       }
-      
-      // Add AI response based on detected emotion
-      await Future.delayed(const Duration(seconds: 1));
-      _addVoiceEmotionResponse(voiceData);
-      
-      _saveCurrentConversation();
 
-      // Show success
+      uploadProgress.value = 0.6;
+      uploadStatus.value = 'Analyzing emotions from audio...';
+
+      // Analyze audio
+      final result = await _mediaService.analyzeVoice(audio);
+
+      uploadProgress.value = 1.0;
+      uploadStatus.value = 'Adding results to chat...';
+
+      String emotionResult = 'No emotion analysis available';
+
+      if (result.success) {
+        final voiceData = result.data!;
+        emotionResult = _formatVoiceAnalysis(voiceData);
+
+        // Replace placeholder with actual result
+        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
+        if (index != -1) {
+          messages[index] =
+              'You: 🎤 **Audio Analysis:** "$fileName" ($fileSize)\n\n$emotionResult';
+        }
+
+        // Add AI response based on detected emotion
+        await Future.delayed(const Duration(seconds: 1));
+        _addVoiceEmotionResponse(voiceData);
+
+        _saveCurrentConversation();
+
+        // Show success
+        showUploadNotification.value = false;
+        Get.snackbar(
+          '✅ Voice Analysis Complete',
+          'Emotion detected from audio!',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+          snackPosition: SnackPosition.TOP,
+        );
+      } else {
+        // Replace placeholder with error
+        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
+        if (index != -1) {
+          messages[index] =
+              'You: 🎤 **Failed to analyze audio:** "$fileName"\nError: ${result.message}';
+        }
+
+        showUploadNotification.value = false;
+        Get.snackbar(
+          '❌ Analysis Failed',
+          result.message ?? 'Could not analyze audio',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      print('💥 [ChatVM] Audio processing error: $e');
+
       showUploadNotification.value = false;
       Get.snackbar(
-        '✅ Voice Analysis Complete',
-        'Emotion detected from audio!',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-        snackPosition: SnackPosition.TOP,
-      );
-    } else {
-      // Replace placeholder with error
-      final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-      if (index != -1) {
-        messages[index] = 'You: 🎤 **Failed to analyze audio:** "$fileName"\nError: ${result.message}';
-      }
-      
-      showUploadNotification.value = false;
-      Get.snackbar(
-        '❌ Analysis Failed',
-        result.message ?? 'Could not analyze audio',
+        'Error',
+        'Failed to process audio: ${e.toString()}',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         duration: const Duration(seconds: 3),
       );
+    } finally {
+      isUploadingImage.value = false;
+      uploadProgress.value = 0.0;
+      selectedAudio.value = null;
+      uploadStatus.value = '';
+
+      Future.delayed(const Duration(milliseconds: 500), () {
+        showUploadNotification.value = false;
+      });
     }
-  } catch (e) {
-    print('💥 [ChatVM] Audio processing error: $e');
-    
-    showUploadNotification.value = false;
-    Get.snackbar(
-      'Error',
-      'Failed to process audio: ${e.toString()}',
-      backgroundColor: Colors.red,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 3),
-    );
-  } finally {
-    isUploadingImage.value = false;
-    uploadProgress.value = 0.0;
-    selectedAudio.value = null;
-    uploadStatus.value = '';
-    
-    Future.delayed(const Duration(milliseconds: 500), () {
-      showUploadNotification.value = false;
-    });
-  }
-}
-
-/// Add AI response for voice emotion
-void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
-  if (voiceData.error != null) {
-    messages.add('EmoAssist: I couldn\'t analyze the audio properly. '
-        'Please try recording again with clear speech and minimal background noise.');
-    return;
   }
 
-  if (voiceData.emotion == null) {
-    messages.add('EmoAssist: I couldn\'t detect any clear emotion in the audio. '
-        'Try speaking more clearly or with more emotional expression.');
-    return;
+  /// Add AI response for voice emotion
+  void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
+    if (voiceData.error != null) {
+      messages.add('EmoAssist: I couldn\'t analyze the audio properly. '
+          'Please try recording again with clear speech and minimal background noise.');
+      return;
+    }
+
+    if (voiceData.emotion == null) {
+      messages
+          .add('EmoAssist: I couldn\'t detect any clear emotion in the audio. '
+              'Try speaking more clearly or with more emotional expression.');
+      return;
+    }
+
+    final emotion = voiceData.emotion!.toLowerCase();
+    String response = '';
+
+    switch (emotion) {
+      case 'happy':
+        response = 'I can hear the happiness in your voice! 😊 '
+            'Your tone sounds bright and energetic. Would you like to share what\'s making you happy?';
+        break;
+      case 'sad':
+        response = 'I sense sadness in your voice. 😢 '
+            'Your tone sounds softer and slower. It\'s okay to feel this way. '
+            'Would talking about it help?';
+        break;
+      case 'angry':
+        response = 'I can hear frustration or anger in your voice. 😠 '
+            'The intensity in your tone suggests strong feelings. '
+            'Take a deep breath - would you like to talk about what\'s bothering you?';
+        break;
+      case 'fear':
+        response = 'I detect anxiety or fear in your voice. 😨 '
+            'Your speech patterns suggest some nervousness. '
+            'Remember, you\'re safe here. What\'s causing these feelings?';
+        break;
+      case 'surprise':
+        response = 'Surprise detected in your voice! 😲 '
+            'Your tone has that excited, surprised quality. '
+            'Did something unexpected happen?';
+        break;
+      case 'neutral':
+        response = 'Your voice sounds neutral. 😐 '
+            'Sometimes our voices don\'t show what we\'re feeling inside. '
+            'How are you really feeling right now?';
+        break;
+      default:
+        response = 'Thank you for sharing your voice with me. '
+            'Voice analysis is complete. How does hearing these results make you feel?';
+    }
+
+    messages.add('EmoAssist: $response');
   }
-
-  final emotion = voiceData.emotion!.toLowerCase();
-  String response = '';
-
-  switch (emotion) {
-    case 'happy':
-      response = 'I can hear the happiness in your voice! 😊 '
-          'Your tone sounds bright and energetic. Would you like to share what\'s making you happy?';
-      break;
-    case 'sad':
-      response = 'I sense sadness in your voice. 😢 '
-          'Your tone sounds softer and slower. It\'s okay to feel this way. '
-          'Would talking about it help?';
-      break;
-    case 'angry':
-      response = 'I can hear frustration or anger in your voice. 😠 '
-          'The intensity in your tone suggests strong feelings. '
-          'Take a deep breath - would you like to talk about what\'s bothering you?';
-      break;
-    case 'fear':
-      response = 'I detect anxiety or fear in your voice. 😨 '
-          'Your speech patterns suggest some nervousness. '
-          'Remember, you\'re safe here. What\'s causing these feelings?';
-      break;
-    case 'surprise':
-      response = 'Surprise detected in your voice! 😲 '
-          'Your tone has that excited, surprised quality. '
-          'Did something unexpected happen?';
-      break;
-    case 'neutral':
-      response = 'Your voice sounds neutral. 😐 '
-          'Sometimes our voices don\'t show what we\'re feeling inside. '
-          'How are you really feeling right now?';
-      break;
-    default:
-      response = 'Thank you for sharing your voice with me. '
-          'Voice analysis is complete. How does hearing these results make you feel?';
-  }
-
-  messages.add('EmoAssist: $response');
-}
 
   /// Start recording timer
   void _startRecordingTimer() {
@@ -776,8 +833,8 @@ void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
     if (isUser) {
       messages.add('You: $message');
 
-      // Update emotion scores based on message content
-      _updateEmotionScores(message);
+      // Update emotion scores based on message content - FIXED
+      _updateEmotionScoresFromMessage(message);
 
       // Only show typing indicator for text messages (not for images)
       if (showTyping) {
@@ -1060,28 +1117,73 @@ void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
     }
   }
 
-  void _updateEmotionScores(String message) {
+  /// Update emotion scores based on API response - SINGLE VERSION
+  void _updateEmotionScoresFromAPI(TextEmotionData emotionData) {
+    // Map API emotion labels to your UI labels
+    final emotion = emotionData.finalEmotion.toLowerCase();
+
+    if (emotion == 'joy') {
+      textSentimentScore.value = 0.85 + (DateTime.now().millisecond % 10) / 100;
+      currentEmotion.value = 'Positive Mood';
+    } else if (emotion == 'sad') {
+      textSentimentScore.value = 0.25 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Sadness Detected';
+    } else if (emotion == 'anger') {
+      textSentimentScore.value = 0.20 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Anger Detected';
+    } else if (emotion == 'fear') {
+      textSentimentScore.value = 0.35 + (DateTime.now().millisecond % 20) / 100;
+      currentEmotion.value = 'Anxiety Detected';
+    } else if (emotion == 'suprise' || emotion == 'surprise') {
+      textSentimentScore.value = 0.70 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Surprise Detected';
+    } else if (emotion == 'love') {
+      textSentimentScore.value = 0.90 + (DateTime.now().millisecond % 10) / 100;
+      currentEmotion.value = 'Love Detected';
+    } else {
+      textSentimentScore.value = 0.60 + (DateTime.now().millisecond % 20) / 100;
+      currentEmotion.value = 'Neutral State';
+    }
+
+    // Update emotion tag
+    emotionTag.value = 'AI-Powered Analysis';
+  }
+
+  /// Update emotion scores based on simple message content analysis
+  void _updateEmotionScoresFromMessage(String message) {
     final lowercaseMessage = message.toLowerCase();
 
+    // Simple sentiment analysis for non-API fallback
     if (lowercaseMessage.contains('happy') ||
-        lowercaseMessage.contains('good')) {
-      textSentimentScore.value = 0.85 + (DateTime.now().millisecond % 15) / 100;
+        lowercaseMessage.contains('good') ||
+        lowercaseMessage.contains('great') ||
+        lowercaseMessage.contains('excellent') ||
+        lowercaseMessage.contains('awesome')) {
+      textSentimentScore.value = 0.80 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Positive Mood';
     } else if (lowercaseMessage.contains('sad') ||
-        lowercaseMessage.contains('bad')) {
-      textSentimentScore.value = 0.30 + (DateTime.now().millisecond % 20) / 100;
+        lowercaseMessage.contains('bad') ||
+        lowercaseMessage.contains('terrible') ||
+        lowercaseMessage.contains('awful')) {
+      textSentimentScore.value = 0.25 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Sadness Detected';
+    } else if (lowercaseMessage.contains('angry') ||
+        lowercaseMessage.contains('mad') ||
+        lowercaseMessage.contains('frustrated')) {
+      textSentimentScore.value = 0.20 + (DateTime.now().millisecond % 15) / 100;
+      currentEmotion.value = 'Anger Detected';
     } else if (lowercaseMessage.contains('anxious') ||
-        lowercaseMessage.contains('worried')) {
-      textSentimentScore.value = 0.45 + (DateTime.now().millisecond % 25) / 100;
+        lowercaseMessage.contains('worried') ||
+        lowercaseMessage.contains('scared')) {
+      textSentimentScore.value = 0.35 + (DateTime.now().millisecond % 20) / 100;
+      currentEmotion.value = 'Anxiety Detected';
     } else {
-      textSentimentScore.value = 0.65 + (DateTime.now().millisecond % 20) / 100;
+      textSentimentScore.value = 0.60 + (DateTime.now().millisecond % 20) / 100;
+      currentEmotion.value = 'Neutral State';
     }
 
-    if (isPremiumUser.value) {
-      voiceToneScore.value = 0.25 + (DateTime.now().second % 50) / 100;
-      facialExpressionScore.value = 0.10 + (DateTime.now().second % 30) / 100;
-    }
-
-    _updateCurrentEmotion();
+    // Update emotion tag
+    emotionTag.value = 'Simple Analysis';
   }
 
   void _updateCurrentEmotion() {
@@ -1295,154 +1397,158 @@ void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
   }
 
   // In ChatViewModel - Replace the existing processSelectedImage method
-Future<void> processSelectedImage(File image) async {
-  print('🖼️ [ChatVM] Starting image processing');
-  isUploadingImage.value = true;
-  uploadProgress.value = 0.0;
+  Future<void> processSelectedImage(File image) async {
+    print('🖼️ [ChatVM] Starting image processing');
+    isUploadingImage.value = true;
+    uploadProgress.value = 0.0;
 
-  // Show upload notification
-  showUploadNotification.value = true;
-  uploadStatus.value = 'Uploading image...';
+    // Show upload notification
+    showUploadNotification.value = true;
+    uploadStatus.value = 'Uploading image...';
 
-  try {
-    // Get image info
-    final fileName = _imageService.getFileName(image);
-    final fileSize = _imageService.getFileSize(image);
+    try {
+      // Get image info
+      final fileName = _imageService.getFileName(image);
+      final fileSize = _imageService.getFileSize(image);
 
-    // Add placeholder message immediately
-    final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
-    messages.add('You: 📷 Uploading "$fileName" ($fileSize)... [ID: $placeholderId]');
+      // Add placeholder message immediately
+      final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
+      messages.add(
+          'You: 📷 Uploading "$fileName" ($fileSize)... [ID: $placeholderId]');
 
-    // Update progress
-    uploadProgress.value = 0.3;
-    uploadStatus.value = 'Sending to AI...';
+      // Update progress
+      uploadProgress.value = 0.3;
+      uploadStatus.value = 'Sending to AI...';
 
-    // Analyze the image
-    final result = await _mediaService.analyzeImage(image);
+      // Analyze the image
+      final result = await _mediaService.analyzeImage(image);
 
-    if (result.success) {
-      uploadProgress.value = 0.7;
-      uploadStatus.value = 'Processing results...';
+      if (result.success) {
+        uploadProgress.value = 0.7;
+        uploadStatus.value = 'Processing results...';
 
-      final emotionData = result.data!;
-      final analysisResult = _formatImageAnalysis(emotionData);
+        final emotionData = result.data!;
+        final analysisResult = _formatImageAnalysis(emotionData);
 
-      // Replace placeholder with actual result
-      final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-      if (index != -1) {
-        messages[index] = 'You: 📷 **Image Uploaded:** "$fileName" ($fileSize)\n\n$analysisResult';
+        // Replace placeholder with actual result
+        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
+        if (index != -1) {
+          messages[index] =
+              'You: 📷 **Image Uploaded:** "$fileName" ($fileSize)\n\n$analysisResult';
+        } else {
+          messages.add(
+              'You: 📷 **Image Uploaded:** "$fileName" ($fileSize)\n\n$analysisResult');
+        }
+
+        uploadProgress.value = 1.0;
+        uploadStatus.value = 'Analysis complete!';
+
+        // Add AI response based on emotion
+        await Future.delayed(const Duration(seconds: 1));
+        _addEmotionBasedResponse(emotionData);
+
+        _saveCurrentConversation();
+
+        // Show success
+        showUploadNotification.value = false;
+
+        Get.snackbar(
+          '✅ Image Analysis Complete',
+          '${emotionData.facesDetected} face(s) analyzed successfully!',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+          snackPosition: SnackPosition.TOP,
+        );
       } else {
-        messages.add('You: 📷 **Image Uploaded:** "$fileName" ($fileSize)\n\n$analysisResult');
+        // Replace placeholder with error
+        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
+        if (index != -1) {
+          messages[index] =
+              'You: 📷 **Failed to analyze image:** "$fileName"\nError: ${result.message}';
+        }
+
+        showUploadNotification.value = false;
+
+        Get.snackbar(
+          '❌ Analysis Failed',
+          result.message ?? 'Could not analyze image',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
       }
+    } catch (e) {
+      print('💥 [ChatVM] Image processing error: $e');
 
-      uploadProgress.value = 1.0;
-      uploadStatus.value = 'Analysis complete!';
-
-      // Add AI response based on emotion
-      await Future.delayed(const Duration(seconds: 1));
-      _addEmotionBasedResponse(emotionData);
-
-      _saveCurrentConversation();
-
-      // Show success
       showUploadNotification.value = false;
-      
+
       Get.snackbar(
-        '✅ Image Analysis Complete',
-        '${emotionData.facesDetected} face(s) analyzed successfully!',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-        snackPosition: SnackPosition.TOP,
-      );
-    } else {
-      // Replace placeholder with error
-      final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-      if (index != -1) {
-        messages[index] = 'You: 📷 **Failed to analyze image:** "$fileName"\nError: ${result.message}';
-      }
-      
-      showUploadNotification.value = false;
-      
-      Get.snackbar(
-        '❌ Analysis Failed',
-        result.message ?? 'Could not analyze image',
+        'Error',
+        'Failed to process image: ${e.toString()}',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         duration: const Duration(seconds: 3),
       );
+    } finally {
+      isUploadingImage.value = false;
+      uploadProgress.value = 0.0;
+      selectedImage.value = null;
+      uploadStatus.value = '';
+
+      Future.delayed(const Duration(milliseconds: 500), () {
+        showUploadNotification.value = false;
+      });
     }
-  } catch (e) {
-    print('💥 [ChatVM] Image processing error: $e');
-    
-    showUploadNotification.value = false;
-    
-    Get.snackbar(
-      'Error',
-      'Failed to process image: ${e.toString()}',
-      backgroundColor: Colors.red,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 3),
-    );
-  } finally {
-    isUploadingImage.value = false;
-    uploadProgress.value = 0.0;
-    selectedImage.value = null;
-    uploadStatus.value = '';
-    
-    Future.delayed(const Duration(milliseconds: 500), () {
-      showUploadNotification.value = false;
-    });
-  }
-}
-
-/// Add AI response based on detected emotion
-void _addEmotionBasedResponse(ImageEmotionData emotionData) {
-  if (emotionData.facesDetected == 0) {
-    messages.add('EmoAssist: I couldn\'t detect any faces in the image. '
-        'For accurate emotion analysis, please upload a clear photo with a visible face.');
-    return;
   }
 
-  final primaryEmotion = emotionData.results.first.emotion.toLowerCase();
-  String response = '';
+  /// Add AI response based on detected emotion
+  void _addEmotionBasedResponse(ImageEmotionData emotionData) {
+    if (emotionData.facesDetected == 0) {
+      messages.add('EmoAssist: I couldn\'t detect any faces in the image. '
+          'For accurate emotion analysis, please upload a clear photo with a visible face.');
+      return;
+    }
 
-  switch (primaryEmotion) {
-    case 'happy':
-      response = 'I can see the happiness in this image! 😊 '
-          'That bright smile says a lot. Would you like to share what made you so happy today?';
-      break;
-    case 'sad':
-      response = 'I sense some sadness here. 😢 '
-          'It\'s completely okay to feel this way. Remember, every cloud has a silver lining. '
-          'Would talking about it help?';
-      break;
-    case 'angry':
-      response = 'I can see signs of frustration or anger. 😠 '
-          'Sometimes expressing these feelings can help release them. '
-          'Take a deep breath - would you like to talk about what\'s bothering you?';
-      break;
-    case 'fear':
-      response = 'I detect some anxiety or fear in this expression. 😨 '
-          'These feelings can be overwhelming, but you\'re not alone. '
-          'What\'s causing these feelings? I\'m here to listen.';
-      break;
-    case 'surprise':
-      response = 'Surprise! 😲 Did something unexpected happen? '
-          'I\'d love to hear about it if you want to share.';
-      break;
-    case 'neutral':
-      response = 'I see a neutral expression. 😐 '
-          'Sometimes our faces don\'t show what we\'re feeling inside. '
-          'How are you really feeling right now?';
-      break;
-    default:
-      response = 'Thank you for sharing this image with me. '
-          'Emotion analysis is complete. How does seeing these results make you feel?';
+    final primaryEmotion = emotionData.results.first.emotion.toLowerCase();
+    String response = '';
+
+    switch (primaryEmotion) {
+      case 'happy':
+        response = 'I can see the happiness in this image! 😊 '
+            'That bright smile says a lot. Would you like to share what made you so happy today?';
+        break;
+      case 'sad':
+        response = 'I sense some sadness here. 😢 '
+            'It\'s completely okay to feel this way. Remember, every cloud has a silver lining. '
+            'Would talking about it help?';
+        break;
+      case 'angry':
+        response = 'I can see signs of frustration or anger. 😠 '
+            'Sometimes expressing these feelings can help release them. '
+            'Take a deep breath - would you like to talk about what\'s bothering you?';
+        break;
+      case 'fear':
+        response = 'I detect some anxiety or fear in this expression. 😨 '
+            'These feelings can be overwhelming, but you\'re not alone. '
+            'What\'s causing these feelings? I\'m here to listen.';
+        break;
+      case 'surprise':
+        response = 'Surprise! 😲 Did something unexpected happen? '
+            'I\'d love to hear about it if you want to share.';
+        break;
+      case 'neutral':
+        response = 'I see a neutral expression. 😐 '
+            'Sometimes our faces don\'t show what we\'re feeling inside. '
+            'How are you really feeling right now?';
+        break;
+      default:
+        response = 'Thank you for sharing this image with me. '
+            'Emotion analysis is complete. How does seeing these results make you feel?';
+    }
+
+    messages.add('EmoAssist: $response');
   }
-
-  messages.add('EmoAssist: $response');
-}
 
   void clearSelectedImage() {
     selectedImage.value = null;
