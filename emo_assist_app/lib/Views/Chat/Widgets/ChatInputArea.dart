@@ -460,40 +460,43 @@ class _ChatInputAreaState extends State<ChatInputArea> {
     );
   }
 
-  Widget _buildQuickActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-  }) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Column(
+  // In ChatInputArea - Update _buildQuickActionButton
+Widget _buildQuickActionButton({
+  required IconData icon,
+  required String label,
+  required VoidCallback onPressed,
+  Color? color,
+}) {
+  return GestureDetector(
+    onTap: onPressed,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color ?? Constants.primaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Constants.primaryColor.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Constants.primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Constants.primaryColor.withOpacity(0.3),
-              ),
-            ),
-            child: Icon(icon, size: 20, color: Constants.primaryColor),
-          ),
-          const SizedBox(height: 4),
+          Icon(icon, size: 20, color: color ?? Constants.primaryColor),
+          const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 10,
-              color: Constants.textColor.withOpacity(0.7),
+              fontSize: 12,
               fontWeight: FontWeight.w500,
+              color: color ?? Constants.textColor.withOpacity(0.8),
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _sendMessage() {
     final message = _messageController.text.trim();

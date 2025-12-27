@@ -1,4 +1,3 @@
-
 import 'package:emo_assist_app/Binding/AppBinding.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
 import 'package:emo_assist_app/Resources/RouteNames.dart';

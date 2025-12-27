@@ -8,21 +8,31 @@ import '../Resources/api_client.dart';
 class EmotionService {
   final ApiClient _apiClient = ApiClient();
 
-  /// Analyze text for emotions using the /predict_text endpoint
+  // In lib/Services/EmotionService.dart - Update analyzeText method
   Future<ApiResponse<TextEmotionData>> analyzeText(String text) async {
+    print('📝 [EmotionService] Analyzing text: ${text.length} characters');
+
     try {
       final response = await _apiClient.post(
         '/predict_text',
         body: {'paragraph': text},
-        fromJson: (json) => TextEmotionData.fromJson(json),
+        fromJson: (json) {
+          print('📝 [EmotionService] Raw JSON response: $json');
+          return TextEmotionData.fromJson(json);
+        },
       );
-      
+
       if (response.success) {
+        print('✅ [EmotionService] Text analysis successful');
+        print(
+            '✅ [EmotionService] Final emotion: ${response.data!.finalEmotion}');
         return ApiResponse.success(response.data!);
       } else {
+        print('❌ [EmotionService] Text analysis failed: ${response.message}');
         return ApiResponse.error(response.message ?? 'Text analysis failed');
       }
     } catch (e) {
+      print('💥 [EmotionService] Exception: $e');
       return ApiResponse.error('Failed to analyze text: ${e.toString()}');
     }
   }
@@ -33,7 +43,7 @@ class EmotionService {
       body: {'audio_data': audioData},
       fromJson: (json) => EmotionData.fromJson(json),
     );
-    
+
     if (response.success) {
       return ApiResponse.success(response.data!);
     } else {
@@ -41,7 +51,6 @@ class EmotionService {
     }
   }
 
-  
   Future<ApiResponse<EmotionData>> analyzeImage(File imageFile) async {
     try {
       final multipartFile = await _apiClient.createMultipartFile(
@@ -54,7 +63,7 @@ class EmotionService {
         files: [multipartFile],
         fromJson: (json) => EmotionData.fromJson(json),
       );
-      
+
       if (response.success) {
         return ApiResponse.success(response.data!);
       } else {
@@ -83,7 +92,7 @@ class EmotionService {
         files: [multipartFile],
         fromJson: (json) => EmotionData.fromJson(json),
       );
-      
+
       if (response.success) {
         return ApiResponse.success(response.data!);
       } else {
@@ -94,4 +103,3 @@ class EmotionService {
     }
   }
 }
-

@@ -1,6 +1,7 @@
 // Screens/Chat/ChatScreen.dart
 import 'package:emo_assist_app/Services/navigation_service.dart';
 import 'package:emo_assist_app/ViewModels/Chat/ChatViewModel.dart';
+import 'package:emo_assist_app/Views/Chat/Widgets/MediaMessageBubble.dart';
 import 'package:emo_assist_app/Views/CommonWidgets/AppBarWidget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -66,37 +67,68 @@ class ChatScreen extends StatelessWidget {
   }
 
   // Chat messages list
-  Widget _buildChatMessages() {
-    return Obx(() {
-      // Scroll to bottom when new message arrives
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
+  // In lib/Views/Chat/ChatScreen.dart - Update _buildChatMessages method
+Widget _buildChatMessages() {
+  return Obx(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: viewModel.messages.length,
+      itemBuilder: (context, index) {
+        final message = viewModel.messages[index];
+        final isUser = message.startsWith('You:');
+        final messageText = isUser ? message.substring(4) : message.substring(10);
+        
+        // Check if this is a media message
+        final isMediaMessage = message.contains('📷') || 
+                               message.contains('🎤') || 
+                               message.contains('🎬');
+        
+        if (isMediaMessage) {
+          // Extract media info
+          String? mediaType;
+          String? fileName;
+          String? fileSize;
+          
+          if (message.contains('📷')) mediaType = 'image';
+          if (message.contains('🎤')) mediaType = 'voice';
+          if (message.contains('🎬')) mediaType = 'video';
+          
+          // Extract filename and size (simplified parsing)
+          final fileMatch = RegExp(r'"(.*?)" \((.*?)\)').firstMatch(message);
+          if (fileMatch != null) {
+            fileName = fileMatch.group(1);
+            fileSize = fileMatch.group(2);
+          }
+          
+          return MediaMessageBubble(
+            message: messageText,
+            isUser: isUser,
+            mediaType: mediaType,
+            fileName: fileName,
+            fileSize: fileSize,
           );
-        }
-      });
-
-      return ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: viewModel.messages.length,
-        itemBuilder: (context, index) {
-          final message = viewModel.messages[index];
-          final isUser = message.startsWith('You:');
-          final messageText =
-              isUser ? message.substring(4) : message.substring(10);
-
+        } else {
+          // Regular message bubble
           return ChatMessageBubble(
             message: messageText,
             isUser: isUser,
             index: index,
             viewModel: viewModel,
           );
-        },
-      );
-    });
-  }
+        }
+      },
+    );
+  });
+}
 }

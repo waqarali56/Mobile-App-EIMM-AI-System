@@ -11,7 +11,7 @@ class AppConfig {
   static String get baseUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://192.168.36.28:5104/api/v1';
+        return 'http://10.75.51.253:5104/api/v1';
       case Environment.production:
         return 'https://your-production-domain/api/v1';
     }
@@ -21,7 +21,7 @@ class AppConfig {
   static String get modelBaseUrl1 {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://182.180.159.89:8000';
+        return 'http://182.180.159.89:8002';
       case Environment.production:
         return 'https://your-model1-production-domain';
     }
@@ -38,7 +38,8 @@ class AppConfig {
   }
 
   static bool get isProduction => _currentEnvironment == Environment.production;
-  static bool get isDevelopment => _currentEnvironment == Environment.development;
+  static bool get isDevelopment =>
+      _currentEnvironment == Environment.development;
 
   // API Configuration
   static const Duration defaultTimeout = Duration(seconds: 30);

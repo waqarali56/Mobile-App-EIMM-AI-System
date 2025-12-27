@@ -85,7 +85,7 @@ class ApiClient {
   final http.Client _client = http.Client();
   String? _authToken;
   String? _refreshToken;
-  
+
   Map<String, String> _defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -93,10 +93,10 @@ class ApiClient {
 
   /// Base URL for main .NET backend
   String get baseUrl => AppConfig.baseUrl;
-  
+
   /// Base URL for model 1 (voice, image, video)
   String get modelBaseUrl1 => AppConfig.modelBaseUrl1;
-  
+
   /// Base URL for model 2 (text)
   String get modelBaseUrl2 => AppConfig.modelBaseUrl2;
 
@@ -120,7 +120,7 @@ class ApiClient {
 
   /// Get current auth token
   String? get authToken => _authToken;
-  
+
   /// Get current refresh token
   String? get refreshToken => _refreshToken;
 
@@ -184,13 +184,13 @@ class ApiClient {
             rawResponse: jsonResponse,
           );
         }
-        
+
         // Other errors
         final errorMessage = jsonResponse['message'] ??
-                            jsonResponse['error'] ??
-                            jsonResponse['detail'] ??
-                            'HTTP Error $statusCode';
-        
+            jsonResponse['error'] ??
+            jsonResponse['detail'] ??
+            'HTTP Error $statusCode';
+
         return ApiResponse.error(
           errorMessage.toString(),
           statusCode: statusCode,
@@ -232,7 +232,7 @@ class ApiClient {
     try {
       final url = _buildUrl(endpoint, baseUrl);
       Uri uri = Uri.parse(url);
-      
+
       if (queryParameters != null && queryParameters.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParameters);
       }
@@ -266,7 +266,7 @@ class ApiClient {
     try {
       final url = _buildUrl(endpoint, baseUrl);
       Uri uri = Uri.parse(url);
-      
+
       if (queryParameters != null && queryParameters.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParameters);
       }
@@ -275,7 +275,7 @@ class ApiClient {
       if (body != null) {
         print('Request Body: ${json.encode(body)}');
       }
-      
+
       final response = await _client
           .post(
             uri,
@@ -301,82 +301,95 @@ class ApiClient {
 
   /// Build URL with appropriate base URL
   String _buildUrl(String endpoint, String customBaseUrl) {
+    print('🔄 [API] _buildUrl called with:');
+    print('   endpoint: "$endpoint"');
+    print('   customBaseUrl: "$customBaseUrl"');
+
     if (customBaseUrl.isNotEmpty) {
-      return customBaseUrl + endpoint;
+      final url = customBaseUrl + endpoint;
+      print('   ➡️ Using customBaseUrl: $url');
+      return url;
     }
-    
+
     // Determine which base URL to use based on endpoint
     if (endpoint.startsWith('/predict/')) {
-      return modelBaseUrl1 + endpoint;
+      final url = modelBaseUrl1 + endpoint;
+      print('   ➡️ Using modelBaseUrl1: $url');
+      return url;
     } else if (endpoint.startsWith('/predict_text')) {
-      return modelBaseUrl2 + endpoint;
+      final url = modelBaseUrl2 + endpoint;
+      print('   ➡️ Using modelBaseUrl2: $url');
+      return url;
     } else {
-      return this.baseUrl + endpoint;
+      final url = endpoint;
+      print('   ➡️ Using main baseUrl: $url');
+      return url;
     }
   }
 
- Future<ApiResponse<T>> multipartPost<T>(
-  String endpoint, {
-  String baseUrl = '',
-  List<http.MultipartFile>? files,
-  Map<String, String>? fields,
-  required T Function(Map<String, dynamic>) fromJson,
-  Map<String, String>? headers,
-  Duration? timeout,
-}) async {
-  try {
-    print('🚀 [API] Starting multipart POST to: $endpoint');
-    final url = _buildUrl(endpoint, baseUrl);
-    print('🔗 [API] Full URL: $url');
-    final uri = Uri.parse(url);
-    
-    final request = http.MultipartRequest('POST', uri);
-    final requestHeaders = _getHeaders(headers);
-    requestHeaders.remove('Content-Type');
-    request.headers.addAll({
-      'accept': 'application/json',
-      ...requestHeaders,
-    });
-    
-    if (files != null) {
-      print('📎 [API] Attaching ${files.length} file(s)');
-      request.files.addAll(files);
+  Future<ApiResponse<T>> multipartPost<T>(
+    String endpoint, {
+    String baseUrl = '',
+    List<http.MultipartFile>? files,
+    Map<String, String>? fields,
+    required T Function(Map<String, dynamic>) fromJson,
+    Map<String, String>? headers,
+    Duration? timeout,
+  }) async {
+    try {
+      print('🚀 [API] Starting multipart POST to: $endpoint');
+      final url = _buildUrl(endpoint, baseUrl);
+      print('🔗 [API] Full URL: $url');
+      final uri = Uri.parse(url);
+
+      final request = http.MultipartRequest('POST', uri);
+      final requestHeaders = _getHeaders(headers);
+      requestHeaders.remove('Content-Type');
+      request.headers.addAll({
+        'accept': 'application/json',
+        ...requestHeaders,
+      });
+
+      if (files != null) {
+        print('📎 [API] Attaching ${files.length} file(s)');
+        request.files.addAll(files);
+      }
+
+      if (fields != null) {
+        print('📋 [API] Adding fields: ${fields.keys}');
+        request.fields.addAll(fields);
+      }
+
+      print(
+          '⏳ [API] Sending request with timeout: ${timeout ?? AppConfig.uploadTimeout}');
+
+      // Send request with timeout
+      final streamedResponse =
+          await request.send().timeout(timeout ?? AppConfig.uploadTimeout);
+      print('✅ [API] Request sent successfully');
+
+      // Convert streamed response to regular response
+      final response = await http.Response.fromStream(streamedResponse);
+      print('📥 [API] Response received: ${response.statusCode}');
+
+      // Print response body (first 200 chars for brevity)
+      final responseBody = response.body;
+      if (responseBody.length > 200) {
+        print('📄 [API] Response body: ${responseBody.substring(0, 200)}...');
+      } else {
+        print('📄 [API] Response body: $responseBody');
+      }
+
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      print('❌ [API] multipartPost error: $e');
+      // For stack trace, we need to handle it differently
+      if (e is Error) {
+        print('🧵 [API] Stack trace: ${e.stackTrace}');
+      }
+      return ApiResponse.error('Network error: ${e.toString()}');
     }
-    
-    if (fields != null) {
-      print('📋 [API] Adding fields: ${fields.keys}');
-      request.fields.addAll(fields);
-    }
-    
-    print('⏳ [API] Sending request with timeout: ${timeout ?? AppConfig.uploadTimeout}');
-    
-    // Send request with timeout
-    final streamedResponse = await request.send()
-      .timeout(timeout ?? AppConfig.uploadTimeout);
-    print('✅ [API] Request sent successfully');
-    
-    // Convert streamed response to regular response
-    final response = await http.Response.fromStream(streamedResponse);
-    print('📥 [API] Response received: ${response.statusCode}');
-    
-    // Print response body (first 200 chars for brevity)
-    final responseBody = response.body;
-    if (responseBody.length > 200) {
-      print('📄 [API] Response body: ${responseBody.substring(0, 200)}...');
-    } else {
-      print('📄 [API] Response body: $responseBody');
-    }
-    
-    return _handleResponse<T>(response, fromJson);
-  } catch (e) {
-    print('❌ [API] multipartPost error: $e');
-    // For stack trace, we need to handle it differently
-    if (e is Error) {
-      print('🧵 [API] Stack trace: ${e.stackTrace}');
-    }
-    return ApiResponse.error('Network error: ${e.toString()}');
   }
-}
 
   /// Create multipart file from File object
   Future<http.MultipartFile> createMultipartFile(
@@ -437,21 +450,6 @@ class ApiClient {
         return null;
     }
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   /// Generic PUT request
   Future<ApiResponse<T>> put<T>(
@@ -538,27 +536,9 @@ class ApiClient {
     }
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   /// Refresh access token
-  Future<ApiResponse<Map<String, dynamic>>> refreshAccessToken() async {  // Renamed to avoid conflict
+  Future<ApiResponse<Map<String, dynamic>>> refreshAccessToken() async {
+    // Renamed to avoid conflict
     if (_refreshToken == null || _authToken == null) {
       return ApiResponse.error('No refresh token available');
     }
@@ -575,7 +555,7 @@ class ApiClient {
       if (response.success && response.data != null) {
         final newAccessToken = response.data!['accessToken'];
         final newRefreshToken = response.data!['refreshToken'];
-        
+
         if (newAccessToken != null) {
           setAuthToken(newAccessToken);
         }
@@ -655,7 +635,7 @@ extension ApiClientExtensions on ApiClient {
     return get<Map<String, dynamic>>(API.healthCheck);
   }
 
-   Future<ApiResponse<Map<String, dynamic>>> sendOTP(
+  Future<ApiResponse<Map<String, dynamic>>> sendOTP(
     SendOTPRequest request,
   ) {
     return post<Map<String, dynamic>>(
@@ -711,7 +691,4 @@ extension ApiClientExtensions on ApiClient {
       '${API.checkEmailVerified}/$email',
     );
   }
-
-
-
 }
