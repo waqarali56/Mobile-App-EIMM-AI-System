@@ -6,7 +6,7 @@ import 'package:get/get.dart';
 class MediaMessageBubble extends StatelessWidget {
   final String message;
   final bool isUser;
-  final String? mediaType; // 'image', 'voice', 'video'
+  final String? mediaType;
   final String? fileName;
   final String? fileSize;
 
@@ -24,18 +24,12 @@ class MediaMessageBubble extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Column(
-        crossAxisAlignment: isUser
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
+        crossAxisAlignment:
+            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          // Media header
           if (mediaType != null && fileName != null)
             _buildMediaHeader(context),
-          
-          // Message content
           _buildMessageContent(context),
-          
-          // Timestamp
           _buildTimestamp(),
         ],
       ),
@@ -46,7 +40,7 @@ class MediaMessageBubble extends StatelessWidget {
     IconData icon;
     Color iconColor;
     String typeText;
-    
+
     switch (mediaType) {
       case 'image':
         icon = Icons.image;
@@ -68,12 +62,25 @@ class MediaMessageBubble extends StatelessWidget {
         iconColor = Colors.grey;
         typeText = 'File';
     }
-    
+
+    // Calculate available width for the text content
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxWidth = screenWidth * 0.85 - 80; // Account for icon, padding, and margins
+
     return Container(
-      margin: EdgeInsets.only(bottom: 8, left: isUser ? 0 : 40, right: isUser ? 40 : 0),
+      margin: EdgeInsets.only(
+        bottom: 8,
+        left: isUser ? 0 : 40,
+        right: isUser ? 40 : 0,
+      ),
+      constraints: BoxConstraints(
+        maxWidth: screenWidth * 0.85,
+      ),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isUser ? Constants.primaryColor.withOpacity(0.1) : Constants.chatAIBubble,
+        color: isUser
+            ? Constants.primaryColor.withOpacity(0.1)
+            : Constants.chatAIBubble,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Constants.inputBorder),
       ),
@@ -82,50 +89,79 @@ class MediaMessageBubble extends StatelessWidget {
         children: [
           Icon(icon, color: iconColor, size: 20),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                typeText,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Constants.textColor,
-                ),
-              ),
-              if (fileName != null)
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
-                  fileName!,
+                  typeText,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Constants.textColor.withOpacity(0.7),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Constants.textColor,
                   ),
                 ),
-              if (fileSize != null)
-                Text(
-                  fileSize!,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Constants.textColor.withOpacity(0.5),
+                if (fileName != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _truncateFileName(fileName!, maxLength: 30),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Constants.textColor.withOpacity(0.7),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-            ],
+                ],
+                if (fileSize != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    fileSize!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Constants.textColor.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  // Helper method to truncate long filenames intelligently
+  String _truncateFileName(String fileName, {int maxLength = 30}) {
+    if (fileName.length <= maxLength) return fileName;
+
+    // Try to preserve the file extension
+    final lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex != -1 && lastDotIndex > fileName.length - 10) {
+      final extension = fileName.substring(lastDotIndex);
+      final nameWithoutExt = fileName.substring(0, lastDotIndex);
+      final availableLength = maxLength - extension.length - 3; // 3 for "..."
+      
+      if (availableLength > 0) {
+        return '${nameWithoutExt.substring(0, availableLength)}...$extension';
+      }
+    }
+
+    // Fallback: simple truncation
+    return '${fileName.substring(0, maxLength - 3)}...';
+  }
+
   Widget _buildMessageContent(BuildContext context) {
     final bool hasAnalysis = message.contains('**Analysis Results**') ||
         message.contains('**Detected Emotion**') ||
         message.contains('**Face Detected**');
-    
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment:
+          isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
       children: [
-        // Avatar for AI messages
         if (!isUser)
           Container(
             margin: const EdgeInsets.only(right: 8, top: 4),
@@ -141,8 +177,6 @@ class MediaMessageBubble extends StatelessWidget {
               color: Constants.primaryColor,
             ),
           ),
-        
-        // Message bubble
         Flexible(
           child: Container(
             constraints: BoxConstraints(
@@ -170,8 +204,6 @@ class MediaMessageBubble extends StatelessWidget {
             child: _buildMessageText(),
           ),
         ),
-        
-        // Avatar for user messages
         if (isUser)
           Container(
             margin: const EdgeInsets.only(left: 8, top: 4),
@@ -193,19 +225,19 @@ class MediaMessageBubble extends StatelessWidget {
 
   Widget _buildMessageText() {
     final lines = message.split('\n');
-    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: lines.map((line) {
-        final isBold = line.contains('**') && line.indexOf('**') != line.lastIndexOf('**');
-        final isHeader = line.contains('**Analysis Results**') || 
-                        line.contains('**Detected Emotion**') ||
-                        line.contains('**Face Detected**');
-        final isListItem = line.trim().startsWith('•') || line.trim().startsWith('-');
-        final isEmojiLine = _containsEmoji(line) && line.length < 20;
-        
+        final isBold =
+            line.contains('**') && line.indexOf('**') != line.lastIndexOf('**');
+        final isHeader = line.contains('**Analysis Results**') ||
+            line.contains('**Detected Emotion**') ||
+            line.contains('**Face Detected**');
+        final isListItem =
+            line.trim().startsWith('•') || line.trim().startsWith('-');
+
         String processedLine = line.replaceAll('**', '');
-        
+
         return Padding(
           padding: EdgeInsets.only(bottom: isHeader ? 12 : 4),
           child: Text(
@@ -224,15 +256,15 @@ class MediaMessageBubble extends StatelessWidget {
 
   bool _containsEmoji(String text) {
     final emojiRegex = RegExp(
-      r'(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])'
-    );
+        r'(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])');
     return emojiRegex.hasMatch(text);
   }
 
   Widget _buildTimestamp() {
     final now = DateTime.now();
-    final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    
+    final time =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
     return Container(
       margin: EdgeInsets.only(
         top: 4,

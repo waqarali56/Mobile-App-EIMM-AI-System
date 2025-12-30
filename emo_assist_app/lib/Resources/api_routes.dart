@@ -1,36 +1,29 @@
 // lib/Resources/api_routes.dart
-import 'app_config.dart';
+import 'package:emo_assist_app/Resources/app_config.dart';
 
 class API {
   static String get baseUrl => AppConfig.baseUrl;
 
-  // Auth endpoints (matching your backend Swagger)
-  static String get authBase => '$baseUrl/auth';
-  static String get login => '$authBase/login';
-  static String get register => '$authBase/register';
-  static String get googleOAuth => '$authBase/oauth/google';
-  static String get googleOAuthCallback => '$authBase/oauth/google/callback';
-  static String get logout => '$authBase/logout';
-  static String get refreshToken => '$authBase/refresh-token';
-  static String get changePassword => '$authBase/change-password';
-  static String get healthCheck => '$authBase/health-check';
+  // Auth endpoints
+  static String get login => '$baseUrl/api/v1/auth/login';
+  static String get register => '$baseUrl/api/v1/auth/register';
+  static String get googleOAuth => '$baseUrl/api/v1/auth/oauth/google';
+  static String get googleOAuthCallback => '$baseUrl/api/v1/auth/oauth/google/callback';
+  static String get logout => '$baseUrl/api/v1/auth/logout';
+  static String get refreshToken => '$baseUrl/api/v1/auth/refresh-token';
+  static String get changePassword => '$baseUrl/api/v1/auth/change-password';
+  static String get healthCheck => '$baseUrl/api/v1/auth/health-check';
 
+  // OTP endpoints
+  static String get sendOTP => '$baseUrl/api/v1/auth/send-otp';
+  static String get verifyOTP => '$baseUrl/api/v1/auth/verify-otp';
+  static String get resendOTP => '$baseUrl/api/v1/auth/resend-otp';
+  static String get sendPasswordResetOTP => '$baseUrl/api/v1/auth/send-password-reset-otp';
+  static String get resetPasswordWithOTP => '$baseUrl/api/v1/auth/reset-password-with-otp';
+  static String get checkEmailVerified => '$baseUrl/api/v1/auth/check-email-verified';
 
-
-
- // OTP endpoints
-  static String get sendOTP => '$authBase/send-otp';
-  static String get verifyOTP => '$authBase/verify-otp';
-  static String get resendOTP => '$authBase/resend-otp';
-  static String get sendPasswordResetOTP => '$authBase/send-password-reset-otp';
-  static String get resetPasswordWithOTP => '$authBase/reset-password-with-otp';
-  static String get checkEmailVerified => '$authBase/check-email-verified';
-
-
-
-  
-  // User management (admin only)
-  static String get users => '$authBase/users';
-  static String revokeToken(String userId) => '$authBase/revoke/$userId';
-  static String deleteUser(String id) => '$authBase/delete/$id';
+  // User management
+  static String get users => '$baseUrl/api/v1/auth/users';
+  static String revokeToken(String userId) => '$baseUrl/api/v1/auth/revoke/$userId';
+  static String deleteUser(String id) => '$baseUrl/api/v1/auth/delete/$id';
 }

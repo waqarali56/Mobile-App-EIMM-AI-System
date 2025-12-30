@@ -328,6 +328,21 @@ class ApiClient {
       serviceName = 'Main Backend';
     }
 
+    // FIX: Check if endpoint already contains the base URL
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      // Endpoint is already a full URL
+      print('   ➡️ Using full URL from endpoint: $endpoint');
+      return endpoint;
+    }
+
+    // FIX: Check if endpoint already contains /api/v1/auth
+    if (endpoint.contains('/api/v1/auth')) {
+      // Endpoint already has full path, just prepend base URL
+      final url = _ensureUrlFormat(baseUrl, endpoint);
+      print('   ➡️ Using $serviceName with full endpoint: $url');
+      return url;
+    }
+
     final url = _ensureUrlFormat(baseUrl, endpoint);
     print('   ➡️ Using $serviceName: $url');
     return url;

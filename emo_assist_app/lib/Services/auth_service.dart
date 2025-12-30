@@ -39,7 +39,7 @@ class AuthService extends BaseApiService {
   Future<ApiResponse<SendOTPResponse>> sendOTP(SendOTPRequest request) async {
     try {
       log('📱 [AuthService] Sending OTP to ${request.email} for type ${request.type}', name: 'Auth');
-      
+   
       final response = await apiClient.post<Map<String, dynamic>>(
         API.sendOTP,
         body: request.toJson(),
