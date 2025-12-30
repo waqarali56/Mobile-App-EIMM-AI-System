@@ -58,8 +58,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
                 return const SizedBox.shrink();
               }),
 
-              // Replace the quick action buttons section:
-// Multi-modal quick actions
+              // Multi-modal quick actions
               Obx(() {
                 if (!widget.viewModel.isPremiumUser.value)
                   return const SizedBox.shrink();
@@ -284,101 +283,133 @@ class _ChatInputAreaState extends State<ChatInputArea> {
           ),
         ),
 
-        // Upload notification overlay
-        Positioned(
-          top: -50, // Start above the input area
-          left: 0,
-          right: 0,
-          child: Obx(() {
-            if (widget.viewModel.showUploadNotification.value) {
-              return _buildUploadNotification();
-            }
-            return const SizedBox.shrink();
-          }),
-        ),
+        // Upload notification overlay - FIXED POSITION
+        Obx(() {
+          if (widget.viewModel.showUploadNotification.value) {
+            return Positioned(
+              // Position above the input area, accounting for keyboard
+              bottom: MediaQuery.of(context).viewInsets.bottom + 57,
+              left: 0,
+              right: 0,
+              child: _buildUploadNotification(),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
       ],
     );
   }
 
   Widget _buildUploadNotification() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      margin: const EdgeInsets.all(8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 12, vertical: 8), // Reduced vertical padding
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8), // Slightly smaller radius
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.1), // Lighter shadow
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: Constants.primaryColor.withOpacity(0.2)),
+        border: Border.all(
+          color: Constants.primaryColor.withOpacity(0.2), // Lighter border
+          width: 1,
+        ),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Loading indicator
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              value: widget.viewModel.uploadProgress.value,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(Constants.primaryColor),
-            ),
-          ),
+          // Remove icon to save space
+          // SizedBox(
+          //   width: 24,
+          //   height: 24,
+          //   child: CircularProgressIndicator(
+          //     strokeWidth: 2,
+          //     value: widget.viewModel.uploadProgress.value,
+          //     backgroundColor: Colors.grey[200],
+          //     valueColor: AlwaysStoppedAnimation<Color>(Constants.primaryColor),
+          //   ),
+          // ),
+          // const SizedBox(width: 8),
 
-          const SizedBox(width: 12),
-
-          // Status text
+          // Status text with thin progress bar
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Processing Image',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Constants.textColor,
+                // Thin progress bar at the top (3px height)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(1.5),
+                  child: LinearProgressIndicator(
+                    value: widget.viewModel.uploadProgress.value,
+                    backgroundColor: Colors.grey[200],
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Constants.primaryColor),
+                    minHeight: 3, // Thin 3px bar
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  widget.viewModel.uploadStatus.value,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Constants.textColor.withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6), // Reduced spacing
 
-                // Progress bar
-                LinearProgressIndicator(
-                  value: widget.viewModel.uploadProgress.value,
-                  backgroundColor: Colors.grey[200],
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(Constants.primaryColor),
-                  minHeight: 2,
+                // Status text and percentage in same row
+                Row(
+                  children: [
+                    // Status text
+                    Expanded(
+                      child: Text(
+                        widget.viewModel.uploadStatus.value,
+                        style: TextStyle(
+                          fontSize: 12, // Smaller font
+                          color: Constants.textColor.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+
+                    // Percentage
+                    Text(
+                      '${(widget.viewModel.uploadProgress.value * 100).toInt()}%',
+                      style: TextStyle(
+                        fontSize: 11, // Smaller font
+                        fontWeight: FontWeight.w600,
+                        color: Constants.primaryColor,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-
-          // Cancel button (optional)
-          // IconButton(
-          //   icon: Icon(Icons.close, size: 18, color: Colors.grey),
-          //   onPressed: () {
-          //     // Optional: Add cancel functionality
-          //   },
-          // ),
         ],
       ),
     );
+  }
+
+  // Helper method to determine icon based on upload type
+  IconData _getUploadIcon() {
+    final status = widget.viewModel.uploadStatus.value.toLowerCase();
+    if (status.contains('video')) return Icons.videocam;
+    if (status.contains('voice') || status.contains('audio')) return Icons.mic;
+    if (status.contains('image') || status.contains('photo'))
+      return Icons.image;
+    return Icons.cloud_upload;
+  }
+
+  // Helper method to determine title based on upload type
+  String _getUploadTitle() {
+    final status = widget.viewModel.uploadStatus.value.toLowerCase();
+    if (status.contains('video')) return 'Processing Video';
+    if (status.contains('voice') || status.contains('audio'))
+      return 'Processing Voice';
+    if (status.contains('image') || status.contains('photo'))
+      return 'Processing Image';
+    if (status.contains('emotion')) return 'Analyzing Emotions';
+    return 'Uploading File';
   }
 
   Widget _buildImagePreview() {
@@ -446,7 +477,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
 
           // Clear button
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.close,
               color: Colors.red,
               size: 20,
@@ -460,43 +491,42 @@ class _ChatInputAreaState extends State<ChatInputArea> {
     );
   }
 
-  // In ChatInputArea - Update _buildQuickActionButton
-Widget _buildQuickActionButton({
-  required IconData icon,
-  required String label,
-  required VoidCallback onPressed,
-  Color? color,
-}) {
-  return GestureDetector(
-    onTap: onPressed,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color ?? Constants.primaryColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Constants.primaryColor.withOpacity(0.3),
-          width: 1,
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    Color? color,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color ?? Constants.primaryColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Constants.primaryColor.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: color ?? Constants.primaryColor),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color ?? Constants.textColor.withOpacity(0.8),
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20, color: color ?? Constants.primaryColor),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: color ?? Constants.textColor.withOpacity(0.8),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 
   void _sendMessage() {
     final message = _messageController.text.trim();
@@ -563,7 +593,6 @@ Widget _buildQuickActionButton({
     );
   }
 
-  // In _showAttachmentOptions method, update the options:
   void _showAttachmentOptions() {
     Get.bottomSheet(
       Container(
