@@ -50,7 +50,10 @@ class _ChatInputAreaState extends State<ChatInputArea> {
           ),
           child: Column(
             children: [
-              // Image preview
+              // Mini attachment indicators (text, img, video, voice)
+              Obx(() => _buildAttachmentChips()),
+
+              // Image preview when single image selected
               Obx(() {
                 if (widget.viewModel.selectedImage.value != null) {
                   return _buildImagePreview();
@@ -58,53 +61,43 @@ class _ChatInputAreaState extends State<ChatInputArea> {
                 return const SizedBox.shrink();
               }),
 
-              // Multi-modal quick actions
-              Obx(() {
-                if (!widget.viewModel.isPremiumUser.value)
-                  return const SizedBox.shrink();
-
-                return Container(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Voice recording button
-                      Obx(() {
-                        final isRecording =
-                            widget.viewModel.isRecordingAudio.value;
-                        return _buildQuickActionButton(
-                          icon: isRecording ? Icons.stop : Icons.mic,
-                          label: isRecording
-                              ? 'Stop (${widget.viewModel.recordingDuration.value}s)'
-                              : 'Voice',
-                          onPressed: () {
-                            if (isRecording) {
-                              widget.viewModel.stopAudioRecording();
-                            } else {
-                              widget.viewModel.startAudioRecording();
-                            }
-                          },
-                        );
-                      }),
-
-                      // Video recording button
-                      _buildQuickActionButton(
-                        icon: Icons.videocam,
-                        label: 'Video',
-                        onPressed: () =>
-                            widget.viewModel.recordVideoWithCamera(),
-                      ),
-
-                      // Mood/face button
-                      _buildQuickActionButton(
-                        icon: Icons.face,
-                        label: 'Face',
-                        onPressed: () => _startFaceAnalysis(),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+              // Multi-modal quick actions (text, video, voice, img — all use single Send)
+              Container(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Obx(() {
+                      final isRecording =
+                          widget.viewModel.isRecordingAudio.value;
+                      return _buildQuickActionButton(
+                        icon: isRecording ? Icons.stop : Icons.mic,
+                        label: isRecording
+                            ? 'Stop (${widget.viewModel.recordingDuration.value}s)'
+                            : 'Voice',
+                        onPressed: () {
+                          if (isRecording) {
+                            widget.viewModel.stopAudioRecording();
+                          } else {
+                            widget.viewModel.startAudioRecording();
+                          }
+                        },
+                      );
+                    }),
+                    _buildQuickActionButton(
+                      icon: Icons.videocam,
+                      label: 'Video',
+                      onPressed: () =>
+                          widget.viewModel.recordVideoWithCamera(),
+                    ),
+                    _buildQuickActionButton(
+                      icon: Icons.face,
+                      label: 'Face',
+                      onPressed: () => _startFaceAnalysis(),
+                    ),
+                  ],
+                ),
+              ),
 
               // Main input row
               Row(
@@ -212,6 +205,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
                               maxLines: 4,
                               minLines: 1,
                               textInputAction: TextInputAction.send,
+                              onChanged: (_) => setState(() {}),
                               onSubmitted: (_) => _sendMessage(),
                               style: TextStyle(
                                 fontSize: 14,
@@ -220,21 +214,8 @@ class _ChatInputAreaState extends State<ChatInputArea> {
                             ),
                           ),
 
-                          // Voice input button (for free users)
-                          Obx(() {
-                            if (widget.viewModel.isPremiumUser.value)
-                              return const SizedBox.shrink();
-
-                            return IconButton(
-                              icon: Icon(
-                                Icons.mic_none,
-                                color: Constants.textColor.withOpacity(0.6),
-                                size: 22,
-                              ),
-                              onPressed: _showPremiumPrompt,
-                              padding: const EdgeInsets.all(8),
-                            );
-                          }),
+                          // Voice hint (mic in quick actions above)
+                          const SizedBox.shrink(),
                         ],
                       ),
                     ),
@@ -242,21 +223,27 @@ class _ChatInputAreaState extends State<ChatInputArea> {
 
                   const SizedBox(width: 8),
 
-                  // Send button
+                  // Send button (enabled when text, img, video, or voice attached)
                   Obx(() {
                     final hasText = _messageController.text.trim().isNotEmpty;
                     final hasImage =
                         widget.viewModel.selectedImage.value != null;
+                    final hasVideo =
+                        widget.viewModel.selectedVideo.value != null;
+                    final hasAudio =
+                        widget.viewModel.selectedAudio.value != null;
+                    final canSend =
+                        hasText || hasImage || hasVideo || hasAudio;
 
                     return Container(
                       decoration: BoxDecoration(
-                        color: (hasText || hasImage)
+                        color: canSend
                             ? Constants.primaryColor
                             : Colors.grey,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: (hasText || hasImage)
+                            color: canSend
                                 ? Constants.primaryColor.withOpacity(0.3)
                                 : Colors.grey.withOpacity(0.3),
                             blurRadius: 6,
@@ -266,13 +253,11 @@ class _ChatInputAreaState extends State<ChatInputArea> {
                       ),
                       child: IconButton(
                         icon: Icon(
-                          hasImage
-                              ? Icons.send_and_archive
-                              : Icons.send_rounded,
+                          Icons.send_rounded,
                           color: Colors.white,
                           size: 24,
                         ),
-                        onPressed: (hasText || hasImage) ? _sendMessage : null,
+                        onPressed: canSend ? _sendMessage : null,
                         padding: const EdgeInsets.all(12),
                       ),
                     );
@@ -297,6 +282,65 @@ class _ChatInputAreaState extends State<ChatInputArea> {
           return const SizedBox.shrink();
         }),
       ],
+    );
+  }
+
+  Widget _buildAttachmentChips() {
+    final hasText = _messageController.text.trim().isNotEmpty;
+    final hasImg = widget.viewModel.selectedImage.value != null;
+    final hasVideo = widget.viewModel.selectedVideo.value != null;
+    final hasVoice = widget.viewModel.selectedAudio.value != null;
+    if (!hasText && !hasImg && !hasVideo && !hasVoice) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          if (hasText)
+            _buildChip(Icons.text_fields, 'text', null),
+          if (hasImg)
+            _buildChip(Icons.image, 'img', () => widget.viewModel.clearSelectedImage()),
+          if (hasVideo)
+            _buildChip(Icons.videocam, 'video', () => widget.viewModel.clearSelectedVideo()),
+          if (hasVoice)
+            _buildChip(Icons.mic, 'voice', () => widget.viewModel.clearSelectedAudio()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(IconData icon, String label, VoidCallback? onClear) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Constants.primaryColor.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Constants.primaryColor.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Constants.primaryColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Constants.textColor.withOpacity(0.9),
+            ),
+          ),
+          if (onClear != null) ...[
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onClear,
+              child: Icon(Icons.close, size: 14, color: Constants.textColor.withOpacity(0.7)),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -531,21 +575,17 @@ class _ChatInputAreaState extends State<ChatInputArea> {
   void _sendMessage() {
     final message = _messageController.text.trim();
     final hasImage = widget.viewModel.selectedImage.value != null;
+    final hasVideo = widget.viewModel.selectedVideo.value != null;
+    final hasAudio = widget.viewModel.selectedAudio.value != null;
+    final canSend = message.isNotEmpty || hasImage || hasVideo || hasAudio;
 
-    if (message.isNotEmpty) {
-      widget.viewModel.sendMessage(message);
-      _messageController.clear();
-    }
+    if (!canSend) return;
 
-    // Process image if selected
-    if (hasImage) {
-      widget.viewModel
-          .processSelectedImage(widget.viewModel.selectedImage.value!);
-    }
+    widget.viewModel.sendMultimodalMessage(message);
+    _messageController.clear();
 
     FocusScope.of(context).unfocus();
 
-    // Scroll to bottom after sending
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.scrollController.hasClients) {
         widget.scrollController.animateTo(
@@ -568,12 +608,61 @@ class _ChatInputAreaState extends State<ChatInputArea> {
   }
 
   void _startFaceAnalysis() {
-    Get.snackbar(
-      'Facial Analysis',
-      'Premium feature - Coming soon!',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Constants.primaryColor,
-      colorText: Colors.white,
+    Get.bottomSheet(
+      Container(
+        decoration: BoxDecoration(
+          color: Constants.cardColor,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Add image for emotion analysis',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Constants.textColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tap Send after selecting to analyze',
+              style: TextStyle(
+                fontSize: 13,
+                color: Constants.textColor.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildAttachmentOption(
+                  Icons.camera_alt,
+                  'Camera',
+                  () {
+                    Get.back();
+                    widget.viewModel.takePhoto();
+                  },
+                ),
+                _buildAttachmentOption(
+                  Icons.photo_library,
+                  'Gallery',
+                  () {
+                    Get.back();
+                    widget.viewModel.pickImageFromGallery();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
     );
   }
 

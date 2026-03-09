@@ -3,9 +3,9 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:math';
 import 'package:emo_assist_app/Models/TextEmotionData.dart';
+import 'package:emo_assist_app/Models/MultimodalAnalyzeResponse.dart';
 import 'package:emo_assist_app/Services/AudioVideoService.dart';
-import 'package:emo_assist_app/Services/emotion_api_service.dart';
-import 'package:emo_assist_app/Services/media_analysis_api_service.dart';
+import 'package:emo_assist_app/Services/multimodal_analyze_service.dart';
 import 'package:emo_assist_app/Services/navigation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -57,11 +57,9 @@ class ChatViewModel extends GetxController {
       <Map<String, dynamic>>[].obs;
   final RxBool showMultiModalOptions = false.obs;
 
-  // Services
+  // Services (single API: POST /analyze only)
   final ImageService _imageService = ImageService();
-  final MediaAnalysisService _mediaService = MediaAnalysisService();
-  final EmotionService _emotionService =
-      EmotionService(); // Add emotion service
+  final MultimodalAnalyzeService _multimodalService = MultimodalAnalyzeService();
 
   // For showing/hiding upload notification
   final RxString uploadStatus = ''.obs;
@@ -81,61 +79,121 @@ class ChatViewModel extends GetxController {
     showMultiModalOptions.value = value;
   }
 
-  /// Send message with text emotion analysis (updated)
-  void sendMessage(String message) async {
-    if (message.trim().isEmpty) return;
+  /// Send multimodal message: text + optional image, video, voice. Single API: POST /analyze.
+  Future<void> sendMultimodalMessage(String text) async {
+    final hasText = text.trim().isNotEmpty;
+    final hasImage = selectedImage.value != null;
+    final hasVideo = selectedVideo.value != null;
+    final hasAudio = selectedAudio.value != null;
 
-    // Add user message immediately
-    messages.add('You: $message');
+    if (!hasText && !hasImage && !hasVideo && !hasAudio) return;
 
-    // Start text analysis
     isAnalyzingText.value = true;
     isTyping.value = true;
+    showUploadNotification.value = true;
+    uploadStatus.value = 'Analyzing...';
+    uploadProgress.value = 0.0;
+
+    final parts = <String>[];
+    if (hasText) parts.add(text.trim());
+    if (hasImage) parts.add('📷');
+    if (hasVideo) parts.add('🎬');
+    if (hasAudio) parts.add('🎤');
+    final userLine = 'You: ${parts.join(' ')}';
+    messages.add(userLine);
 
     try {
-      // Analyze text emotions using API
-      final result = await _emotionService.analyzeText(message);
+      uploadProgress.value = 0.3;
+      final result = await _multimodalService.analyze(
+        text: text.trim(),
+        audio: selectedAudio.value,
+        image: selectedImage.value,
+        video: selectedVideo.value,
+      );
+
+      uploadProgress.value = 1.0;
 
       if (result.success && result.data != null) {
-        final emotionData = result.data!;
+        final data = result.data!;
+        _updateEmotionScoresFromFusion(data.fusionResult);
 
-        // Update emotion scores based on API response
-        _updateEmotionScoresFromAPI(emotionData);
+        final emotion = data.fusionResult.finalFusedEmotion;
+        final response = data.fusionResult.psychologistResponse;
 
-        // Add emotion analysis details as a formatted message
-        final emotionDetails = _formatEmotionDetails(emotionData);
-        messages.add('System: $emotionDetails');
-
-        // Generate response based on detected emotion
-        final response = _generateResponseFromEmotion(message, emotionData);
-
-        // Add AI response after a short delay
-        await Future.delayed(const Duration(seconds: 2));
+        String details = '📊 **Emotion:** ${_capitalizeFirst(emotion)}';
+        if (data.fusionResult.totalProcessingTimeSeconds > 0) {
+          details += '\n⏱ ${data.fusionResult.totalProcessingTimeSeconds.toStringAsFixed(1)}s';
+        }
+        messages.add('System: $details');
         messages.add('EmoAssist: $response');
 
-        // Update conversation preview
-        _updateConversationPreview(message, response);
-
-        // Save conversation
+        _updateConversationPreview(userLine, response);
         _saveCurrentConversation();
+
+        Get.snackbar(
+          '✅ Analysis complete',
+          'Emotion: ${_capitalizeFirst(emotion)}',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+          snackPosition: SnackPosition.TOP,
+        );
       } else {
-        // Fallback to default response if API fails
-        await Future.delayed(const Duration(seconds: 1));
-        final response = _generateResponse(message);
-        messages.add('EmoAssist: $response');
+        messages.add('EmoAssist: Sorry, I couldn\'t analyze that. ${result.message ?? 'Please try again.'}');
         _saveCurrentConversation();
+        Get.snackbar(
+          '❌ Analysis failed',
+          result.message ?? 'Try again',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
       }
     } catch (e) {
-      print('Error analyzing text: $e');
-      // Fallback response
-      await Future.delayed(const Duration(seconds: 1));
-      final response = _generateResponse(message);
-      messages.add('EmoAssist: $response');
+      messages.add('EmoAssist: Something went wrong. Please try again.');
       _saveCurrentConversation();
+      Get.snackbar(
+        'Error',
+        e.toString(),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     } finally {
       isAnalyzingText.value = false;
       isTyping.value = false;
+      showUploadNotification.value = false;
+      uploadStatus.value = '';
+      uploadProgress.value = 0.0;
+      clearSelectedImage();
+      clearSelectedVideo();
+      clearSelectedAudio();
     }
+  }
+
+  void _updateEmotionScoresFromFusion(FusionResult fusion) {
+    final emotion = fusion.finalFusedEmotion.toLowerCase();
+    if (emotion == 'joy' || emotion == 'happy') {
+      textSentimentScore.value = 0.85;
+      currentEmotion.value = 'Positive Mood';
+    } else if (emotion == 'sad') {
+      textSentimentScore.value = 0.25;
+      currentEmotion.value = 'Sadness Detected';
+    } else if (emotion == 'anger') {
+      textSentimentScore.value = 0.20;
+      currentEmotion.value = 'Anger Detected';
+    } else if (emotion == 'fear') {
+      textSentimentScore.value = 0.35;
+      currentEmotion.value = 'Anxiety Detected';
+    } else if (emotion == 'surprise') {
+      textSentimentScore.value = 0.70;
+      currentEmotion.value = 'Surprise Detected';
+    } else if (emotion == 'love') {
+      textSentimentScore.value = 0.90;
+      currentEmotion.value = 'Love Detected';
+    } else {
+      textSentimentScore.value = 0.60;
+      currentEmotion.value = 'Neutral State';
+    }
+    emotionTag.value = 'AI-Powered Analysis';
   }
 
   /// Format image analysis for display
@@ -458,19 +516,14 @@ class ChatViewModel extends GetxController {
     }
   }
 
-  /// Pick video from gallery
+  /// Pick video from gallery (attachment only; sent with Send)
   Future<void> pickVideoFromGallery() async {
     try {
       final File? video = await _audioVideoService.pickVideoFromGallery(
-        maxDuration: 120, // 2 minutes max
-        maxFileSize: 100 * 1024 * 1024, // 100MB max
+        maxDuration: 120,
+        maxFileSize: 100 * 1024 * 1024,
       );
-
-      if (video != null) {
-        selectedVideo.value = video;
-        // Process video immediately or wait for user to send
-        await _processSelectedVideo(video);
-      }
+      if (video != null) selectedVideo.value = video;
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -481,17 +534,13 @@ class ChatViewModel extends GetxController {
     }
   }
 
-  /// Record video with camera
+  /// Record video with camera (attachment only; sent with Send)
   Future<void> recordVideoWithCamera() async {
     try {
       final File? video = await _audioVideoService.recordVideoWithCamera(
-        maxDuration: 60, // 1 minute max
+        maxDuration: 60,
       );
-
-      if (video != null) {
-        selectedVideo.value = video;
-        await _processSelectedVideo(video);
-      }
+      if (video != null) selectedVideo.value = video;
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -531,19 +580,13 @@ class ChatViewModel extends GetxController {
     }
   }
 
-  /// Stop audio recording
+  /// Stop audio recording (attachment only; sent with Send)
   Future<void> stopAudioRecording() async {
     try {
       final File? audio = await _audioVideoService.stopAudioRecording();
       isRecordingAudio.value = false;
       recordingDuration.value = 0;
-
-      if (audio != null) {
-        selectedAudio.value = audio;
-
-        // Process immediately since we have a valid WAV file
-        await _processSelectedAudio(audio);
-      }
+      if (audio != null) selectedAudio.value = audio;
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -554,15 +597,11 @@ class ChatViewModel extends GetxController {
     }
   }
 
-  /// Pick audio file from storage
+  /// Pick audio file (attachment only; sent with Send)
   Future<void> pickAudioFile() async {
     try {
       final File? audio = await _audioVideoService.pickAudioFile();
-
-      if (audio != null) {
-        selectedAudio.value = audio;
-        await _processSelectedAudio(audio);
-      }
+      if (audio != null) selectedAudio.value = audio;
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -573,184 +612,7 @@ class ChatViewModel extends GetxController {
     }
   }
 
-  /// Process selected video
-  Future<void> _processSelectedVideo(File video) async {
-    showUploadNotification.value = true;
-    uploadStatus.value = 'Analyzing video emotions...';
-    isUploadingImage.value = true;
-    uploadProgress.value = 0.0;
-
-    try {
-      uploadProgress.value = 0.3;
-
-      // Get video info
-      final videoInfo = _audioVideoService.getFileInfo(video);
-      final fileName = videoInfo['fileName'];
-      final fileSize = videoInfo['fileSizeFormatted'];
-
-      uploadProgress.value = 0.6;
-      uploadStatus.value = 'Extracting emotions from video...';
-
-      // Analyze video
-      final result = await _mediaService.analyzeVideo(video);
-
-      uploadProgress.value = 1.0;
-      uploadStatus.value = 'Adding results to chat...';
-
-      String emotionResult = 'No emotion analysis available';
-
-      if (result.success) {
-        final videoData = result.data!;
-        emotionResult = 'Video Analysis:\n';
-        emotionResult += 'Final Emotion: ${videoData.finalEmotion}\n';
-
-        // Format probabilities
-        emotionResult += 'Emotion Probabilities:\n';
-        videoData.finalProbabilities.forEach((emotion, probability) {
-          emotionResult +=
-              '  • $emotion: ${(probability * 100).toStringAsFixed(1)}%\n';
-        });
-      } else {
-        emotionResult = 'Video analysis failed: ${result.message}';
-      }
-
-      // Add message to chat
-      messages.add('You: 🎬 Video: $fileName ($fileSize)\n$emotionResult');
-      _saveCurrentConversation();
-
-      // Show success
-      showUploadNotification.value = false;
-      Get.snackbar(
-        '✅ Video Analyzed',
-        'Emotion analysis complete!',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-        snackPosition: SnackPosition.TOP,
-      );
-    } catch (e) {
-      showUploadNotification.value = false;
-      Get.snackbar(
-        'Error',
-        'Failed to analyze video: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    } finally {
-      isUploadingImage.value = false;
-      uploadProgress.value = 0.0;
-      selectedVideo.value = null;
-      uploadStatus.value = '';
-    }
-  }
-
-  /// Process selected audio (WAV format)
-  Future<void> _processSelectedAudio(File audio) async {
-    showUploadNotification.value = true;
-    uploadStatus.value = 'Processing WAV audio...';
-    isUploadingImage.value = true;
-    uploadProgress.value = 0.0;
-
-    try {
-      // Get audio info
-      final audioInfo = _audioVideoService.getFileInfo(audio);
-      final fileName = audioInfo['fileName'];
-      final fileSize = audioInfo['fileSizeFormatted'];
-
-      // Add placeholder message
-      final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
-      messages.add(
-          'You: 🎤 Processing "$fileName" ($fileSize)... [ID: $placeholderId]');
-
-      uploadProgress.value = 0.3;
-      uploadStatus.value = 'Converting to proper format...';
-
-      // Check if it's WAV, if not show warning but proceed
-      if (!fileName.toLowerCase().endsWith('.wav')) {
-        uploadStatus.value = 'Converting audio to WAV...';
-        messages
-            .add('System: ⚠️ Converting audio to WAV format for analysis...');
-      }
-
-      uploadProgress.value = 0.6;
-      uploadStatus.value = 'Analyzing emotions from audio...';
-
-      // Analyze audio
-      final result = await _mediaService.analyzeVoice(audio);
-
-      uploadProgress.value = 1.0;
-      uploadStatus.value = 'Adding results to chat...';
-
-      String emotionResult = 'No emotion analysis available';
-
-      if (result.success) {
-        final voiceData = result.data!;
-        emotionResult = _formatVoiceAnalysis(voiceData);
-
-        // Replace placeholder with actual result
-        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-        if (index != -1) {
-          messages[index] =
-              'You: 🎤 **Audio Analysis:** "$fileName" ($fileSize)\n\n$emotionResult';
-        }
-
-        // Add AI response based on detected emotion
-        await Future.delayed(const Duration(seconds: 1));
-        _addVoiceEmotionResponse(voiceData);
-
-        _saveCurrentConversation();
-
-        // Show success
-        showUploadNotification.value = false;
-        Get.snackbar(
-          '✅ Voice Analysis Complete',
-          'Emotion detected from audio!',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
-          snackPosition: SnackPosition.TOP,
-        );
-      } else {
-        // Replace placeholder with error
-        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-        if (index != -1) {
-          messages[index] =
-              'You: 🎤 **Failed to analyze audio:** "$fileName"\nError: ${result.message}';
-        }
-
-        showUploadNotification.value = false;
-        Get.snackbar(
-          '❌ Analysis Failed',
-          result.message ?? 'Could not analyze audio',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
-        );
-      }
-    } catch (e) {
-      print('💥 [ChatVM] Audio processing error: $e');
-
-      showUploadNotification.value = false;
-      Get.snackbar(
-        'Error',
-        'Failed to process audio: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-      );
-    } finally {
-      isUploadingImage.value = false;
-      uploadProgress.value = 0.0;
-      selectedAudio.value = null;
-      uploadStatus.value = '';
-
-      Future.delayed(const Duration(milliseconds: 500), () {
-        showUploadNotification.value = false;
-      });
-    }
-  }
-
-  /// Add AI response for voice emotion
+  /// Add AI response for voice emotion (legacy; kept for history display)
   void _addVoiceEmotionResponse(VoiceEmotionData voiceData) {
     if (voiceData.error != null) {
       messages.add('EmoAssist: I couldn\'t analyze the audio properly. '
@@ -1396,110 +1258,9 @@ class ChatViewModel extends GetxController {
     }
   }
 
-  // In ChatViewModel - Replace the existing processSelectedImage method
+  /// Image is sent only via Send button with other attachments (single /analyze API).
   Future<void> processSelectedImage(File image) async {
-    print('🖼️ [ChatVM] Starting image processing');
-    isUploadingImage.value = true;
-    uploadProgress.value = 0.0;
-
-    // Show upload notification
-    showUploadNotification.value = true;
-    uploadStatus.value = 'Uploading image...';
-
-    try {
-      // Get image info
-      final fileName = _imageService.getFileName(image);
-      final fileSize = _imageService.getFileSize(image);
-
-      // Add placeholder message immediately
-      final placeholderId = DateTime.now().millisecondsSinceEpoch.toString();
-      messages.add(
-          'You: 📷 Uploading "$fileName" ($fileSize)... [ID: $placeholderId]');
-
-      // Update progress
-      uploadProgress.value = 0.3;
-      uploadStatus.value = 'Sending to AI...';
-
-      // Analyze the image
-      final result = await _mediaService.analyzeImage(image);
-
-      if (result.success) {
-        uploadProgress.value = 0.7;
-        uploadStatus.value = 'Processing results...';
-
-        final emotionData = result.data!;
-        final analysisResult = _formatImageAnalysis(emotionData);
-
-        // Replace placeholder with actual result
-        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-        if (index != -1) {
-          messages[index] =
-              'You: 📷 **Image Uploaded:** "$fileName" ($fileSize)\n\n$analysisResult';
-        } else {
-          messages.add(
-              'You: 📷 **Image Uploaded:** "$fileName" ($fileSize)\n\n$analysisResult');
-        }
-
-        uploadProgress.value = 1.0;
-        uploadStatus.value = 'Analysis complete!';
-
-        // Add AI response based on emotion
-        await Future.delayed(const Duration(seconds: 1));
-        _addEmotionBasedResponse(emotionData);
-
-        _saveCurrentConversation();
-
-        // Show success
-        showUploadNotification.value = false;
-
-        Get.snackbar(
-          '✅ Image Analysis Complete',
-          '${emotionData.facesDetected} face(s) analyzed successfully!',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
-          snackPosition: SnackPosition.TOP,
-        );
-      } else {
-        // Replace placeholder with error
-        final index = messages.indexWhere((msg) => msg.contains(placeholderId));
-        if (index != -1) {
-          messages[index] =
-              'You: 📷 **Failed to analyze image:** "$fileName"\nError: ${result.message}';
-        }
-
-        showUploadNotification.value = false;
-
-        Get.snackbar(
-          '❌ Analysis Failed',
-          result.message ?? 'Could not analyze image',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
-        );
-      }
-    } catch (e) {
-      print('💥 [ChatVM] Image processing error: $e');
-
-      showUploadNotification.value = false;
-
-      Get.snackbar(
-        'Error',
-        'Failed to process image: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-      );
-    } finally {
-      isUploadingImage.value = false;
-      uploadProgress.value = 0.0;
-      selectedImage.value = null;
-      uploadStatus.value = '';
-
-      Future.delayed(const Duration(milliseconds: 500), () {
-        showUploadNotification.value = false;
-      });
-    }
+    // No-op; use Send button to analyze (calls POST /analyze with all attachments).
   }
 
   /// Add AI response based on detected emotion

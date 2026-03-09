@@ -117,7 +117,7 @@ class EmptyChatState extends StatelessWidget {
   Widget _buildQuickSuggestion(String text) {
     return GestureDetector(
       onTap: () {
-        viewModel.sendMessage(text);
+        viewModel.sendMultimodalMessage(text);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

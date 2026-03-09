@@ -290,62 +290,23 @@ class ApiClient {
     }
   }
 
-  /// Build URL with appropriate base URL based on endpoint type
+  /// Build URL: only multimodal /analyze and .NET backend. No other model URLs.
   String _buildUrl(String endpoint, {String? baseUrlOverride}) {
-    print('🔄 [API] _buildUrl called with:');
-    print('   endpoint: "$endpoint"');
-    print('   baseUrlOverride: "$baseUrlOverride"');
-
-    // Use override if provided
     if (baseUrlOverride != null && baseUrlOverride.isNotEmpty) {
-      final url = _ensureUrlFormat(baseUrlOverride, endpoint);
-      print('   ➡️ Using baseUrlOverride: $url');
-      return url;
+      return _ensureUrlFormat(baseUrlOverride, endpoint);
     }
 
-    String baseUrl;
-    String serviceName;
-
-    // Determine which base URL to use based on endpoint
-    if (endpoint.contains('/predict/image') ||
-        endpoint.contains('/predict/video')) {
-      baseUrl = AppConfig.imageVideoModelUrl;
-      serviceName = 'Image/Video Model';
-    } else if (endpoint.contains('/predict_text')) {
-      baseUrl = AppConfig.textModelUrl;
-      serviceName = 'Text Model';
-    } else if (endpoint.contains('/predict/voice') ||
-        endpoint.contains('/predict/audio') ||
-        endpoint.contains('/emotion/voice') ||
-        endpoint.contains('/emotion/audio') ||
-        endpoint.contains('/analyze_voice') ||
-        endpoint.contains('/predict_speech')) {
-      baseUrl = AppConfig.voiceModelUrl;
-      serviceName = 'Voice Model';
-    } else {
-      // For auth and other endpoints, use main backend URL
-      baseUrl = AppConfig.baseUrl;
-      serviceName = 'Main Backend';
-    }
-
-    // FIX: Check if endpoint already contains the base URL
     if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
-      // Endpoint is already a full URL
-      print('   ➡️ Using full URL from endpoint: $endpoint');
       return endpoint;
     }
 
-    // FIX: Check if endpoint already contains /api/v1/auth
-    if (endpoint.contains('/api/v1/auth')) {
-      // Endpoint already has full path, just prepend base URL
-      final url = _ensureUrlFormat(baseUrl, endpoint);
-      print('   ➡️ Using $serviceName with full endpoint: $url');
-      return url;
+    // Multimodal emotion API (POST /analyze)
+    if (endpoint.contains('/analyze')) {
+      return _ensureUrlFormat(AppConfig.multimodal_analyze_ApiUrl, endpoint);
     }
 
-    final url = _ensureUrlFormat(baseUrl, endpoint);
-    print('   ➡️ Using $serviceName: $url');
-    return url;
+    // .NET backend (auth, users, etc.)
+    return _ensureUrlFormat(AppConfig.baseUrl, endpoint);
   }
 
   /// Ensure proper URL format (handles trailing/leading slashes)
@@ -633,6 +594,9 @@ class ApiClient {
     _client.close();
   }
 }
+
+
+
 
 /// Extension methods for common API operations
 extension ApiClientExtensions on ApiClient {

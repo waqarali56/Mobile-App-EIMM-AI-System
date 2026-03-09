@@ -11,37 +11,19 @@ class AppConfig {
   static String get baseUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://192.168.0.104:5104';
+        return 'http://182.180.159.89:5104';
       case Environment.production:
         return 'https://your-production-domain/api/v1';
     }
   }
 
-  // Model URLs for different services
-  static String get imageVideoModelUrl {
+  /// Single multimodal analyze API (text, audio, image, video)
+  static String get multimodal_analyze_ApiUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://182.180.159.89:8002'; // Image/Video port
+        return 'http://182.180.159.89:8003';
       case Environment.production:
-        return 'https://your-image-video-production-domain';
-    }
-  }
-
-  static String get textModelUrl {
-    switch (_currentEnvironment) {
-      case Environment.development:
-        return 'http://182.180.159.89:8001'; // Text port
-      case Environment.production:
-        return 'https://your-text-production-domain';
-    }
-  }
-
-  static String get voiceModelUrl {
-    switch (_currentEnvironment) {
-      case Environment.development:
-        return 'http://182.180.159.89:8000'; // Voice port
-      case Environment.production:
-        return 'https://your-voice-production-domain';
+        return 'https://your-analyze-production-domain';
     }
   }
 
@@ -67,9 +49,7 @@ class AppConfig {
     return {
       'environment': _currentEnvironment.name,
       'baseUrl': baseUrl,
-      'imageVideoModelUrl': imageVideoModelUrl,
-      'textModelUrl': textModelUrl,
-      'voiceModelUrl': voiceModelUrl,
+      'analyzeApiUrl': multimodal_analyze_ApiUrl,
       'isProduction': isProduction,
       'isDevelopment': isDevelopment,
       'enableLogging': enableLogging,

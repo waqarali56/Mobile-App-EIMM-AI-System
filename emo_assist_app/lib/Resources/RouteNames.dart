@@ -7,9 +7,7 @@ class RouteNames {
   static const String forgotPassword = '/forgot-password';
   static const String resetPassword = '/reset-password';
   static const String chat = '/chat';
-    static const String home = '/home';
-
-
+  static const String home = '/home';
 
   // Drawer Routes
   static const String chatHistory = '/chat-history';
@@ -18,4 +16,3 @@ class RouteNames {
   static const String terms = '/terms';
   static const String profile = '/profile';
 }
-
