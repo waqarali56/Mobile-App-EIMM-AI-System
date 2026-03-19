@@ -86,6 +86,10 @@ class ApiClient {
   String? _authToken;
   String? _refreshToken;
 
+  /// When a request returns 401, this runs once (deduped) to refresh tokens; return true to retry.
+  Future<bool> Function()? _sessionRefreshHandler;
+  Future<bool>? _sharedRefreshFuture;
+
   Map<String, String> _defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -115,6 +119,43 @@ class ApiClient {
   /// Get current refresh token
   String? get refreshToken => _refreshToken;
 
+  void setSessionRefreshHandler(Future<bool> Function()? handler) {
+    _sessionRefreshHandler = handler;
+  }
+
+  Future<bool> _runSharedRefresh() async {
+    if (_sessionRefreshHandler == null) return false;
+    if (_sharedRefreshFuture != null) return await _sharedRefreshFuture!;
+    _sharedRefreshFuture = _sessionRefreshHandler!().whenComplete(() {
+      _sharedRefreshFuture = null;
+    });
+    return await _sharedRefreshFuture!;
+  }
+
+  bool _shouldAttemptTokenRefreshForRequest(String url) {
+    final u = url.toLowerCase();
+    if (u.contains('refresh-token')) return false;
+    if (u.contains('/login')) return false;
+    if (u.contains('/register')) return false;
+    if (u.contains('sendotp')) return false;
+    if (u.contains('verifyotp')) return false;
+    if (u.contains('health-check')) return false;
+    if (u.contains('/oauth/')) return false;
+    return true;
+  }
+
+  Future<http.Response> _on401MaybeRefreshAndRetry(
+    http.Response firstResponse,
+    Future<http.Response> Function() resend,
+    String requestUrl,
+  ) async {
+    if (firstResponse.statusCode != 401) return firstResponse;
+    if (!_shouldAttemptTokenRefreshForRequest(requestUrl)) return firstResponse;
+    final ok = await _runSharedRefresh();
+    if (!ok) return firstResponse;
+    return resend();
+  }
+
   /// Set custom headers
   void setCustomHeaders(Map<String, String> headers) {
     _defaultHeaders.addAll(headers);
@@ -132,20 +173,21 @@ class ApiClient {
   /// Handle HTTP response (generic for all APIs)
   ApiResponse<T> _handleResponse<T>(
     http.Response response,
-    T Function(Map<String, dynamic>)? fromJson,
+    T Function(dynamic)? fromJson,
   ) {
     final statusCode = response.statusCode;
 
     try {
       final responseBody = response.body.isEmpty ? '{}' : response.body;
-      final Map<String, dynamic> jsonResponse = json.decode(responseBody);
+      final dynamic decoded = json.decode(responseBody);
+      final Map<String, dynamic> jsonResponse = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
 
       // Handle successful responses
       if (statusCode >= 200 && statusCode < 300) {
         // For model APIs, they return direct data without 'success' property
         if (fromJson != null) {
           try {
-            final data = fromJson(jsonResponse);
+            final data = fromJson(decoded);
             return ApiResponse.success(
               data,
               statusCode: statusCode,
@@ -160,7 +202,7 @@ class ApiClient {
           }
         } else {
           return ApiResponse.success(
-            jsonResponse as T,
+            decoded as T,
             statusCode: statusCode,
             rawResponse: jsonResponse,
           );
@@ -217,7 +259,7 @@ class ApiClient {
     String? baseUrlOverride,
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
-    T Function(Map<String, dynamic>)? fromJson,
+    T Function(dynamic)? fromJson,
     Duration? timeout,
   }) async {
     try {
@@ -228,9 +270,12 @@ class ApiClient {
         uri = uri.replace(queryParameters: queryParameters);
       }
 
-      final response = await _client
+      Future<http.Response> send() => _client
           .get(uri, headers: _getHeaders(headers))
           .timeout(timeout ?? AppConfig.defaultTimeout);
+
+      var response = await send();
+      response = await _on401MaybeRefreshAndRetry(response, send, uri.toString());
 
       return _handleResponse<T>(response, fromJson);
     } on SocketException {
@@ -267,7 +312,7 @@ class ApiClient {
         print('Request Body: ${json.encode(body)}');
       }
 
-      final response = await _client
+      Future<http.Response> send() => _client
           .post(
             uri,
             headers: _getHeaders(headers),
@@ -275,10 +320,14 @@ class ApiClient {
           )
           .timeout(timeout ?? AppConfig.defaultTimeout);
 
+      var response = await send();
+
       print('Response Status: ${response.statusCode}');
       print('Response Body: ${response.body}');
 
-      return _handleResponse<T>(response, fromJson);
+      response = await _on401MaybeRefreshAndRetry(response, send, uri.toString());
+
+      return _handleResponse<T>(response, fromJson as T Function(dynamic p1)?);
     } on SocketException {
       return ApiResponse.error('No internet connection');
     } on HttpException catch (e) {
@@ -300,8 +349,8 @@ class ApiClient {
       return endpoint;
     }
 
-    // Multimodal emotion API (POST /analyze)
-    if (endpoint.contains('/analyze')) {
+    // Multimodal orchestrator API (/analyze, /sessions)
+    if (endpoint.contains('/analyze') || endpoint.contains('sessions')) {
       return _ensureUrlFormat(AppConfig.multimodal_analyze_ApiUrl, endpoint);
     }
 
@@ -330,7 +379,7 @@ class ApiClient {
     String? baseUrlOverride,
     List<http.MultipartFile>? files,
     Map<String, String>? fields,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
@@ -340,36 +389,39 @@ class ApiClient {
       print('🔗 [API] Full URL: $url');
       final uri = Uri.parse(url);
 
-      final request = http.MultipartRequest('POST', uri);
-      final requestHeaders = _getHeaders(headers);
-      requestHeaders
-          .remove('Content-Type'); // Let multipart set its own content-type
-      request.headers.addAll({
-        'accept': 'application/json',
-        ...requestHeaders,
-      });
-
-      if (files != null) {
-        print('📎 [API] Attaching ${files.length} file(s)');
-        request.files.addAll(files);
-      }
-
-      if (fields != null) {
-        print('📋 [API] Adding fields: ${fields.keys}');
-        request.fields.addAll(fields);
-      }
-
       print(
           '⏳ [API] Sending request with timeout: ${timeout ?? AppConfig.uploadTimeout}');
 
+      Future<http.Response> sendMultipart() async {
+        final req = http.MultipartRequest('POST', uri);
+        final requestHeaders = _getHeaders(headers);
+        requestHeaders
+            .remove('Content-Type'); // Let multipart set its own content-type
+        req.headers.addAll({
+          'accept': 'application/json',
+          ...requestHeaders,
+        });
+        if (files != null) {
+          print('📎 [API] Attaching ${files.length} file(s)');
+          req.files.addAll(files);
+        }
+        if (fields != null) {
+          print('📋 [API] Adding fields: ${fields.keys}');
+          req.fields.addAll(fields);
+        }
+        final streamedResponse =
+            await req.send().timeout(timeout ?? AppConfig.uploadTimeout);
+        return http.Response.fromStream(streamedResponse);
+      }
+
       // Send request with timeout
-      final streamedResponse =
-          await request.send().timeout(timeout ?? AppConfig.uploadTimeout);
+      var response = await sendMultipart();
       print('✅ [API] Request sent successfully');
 
-      // Convert streamed response to regular response
-      final response = await http.Response.fromStream(streamedResponse);
       print('📥 [API] Response received: ${response.statusCode}');
+
+      response =
+          await _on401MaybeRefreshAndRetry(response, sendMultipart, url);
 
       // Print response body (first 200 chars for brevity)
       final responseBody = response.body;
@@ -465,7 +517,7 @@ class ApiClient {
     try {
       final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
       final uri = Uri.parse(url);
-      final response = await _client
+      Future<http.Response> send() => _client
           .put(
             uri,
             headers: _getHeaders(headers),
@@ -473,7 +525,10 @@ class ApiClient {
           )
           .timeout(timeout ?? AppConfig.defaultTimeout);
 
-      return _handleResponse<T>(response, fromJson);
+      var response = await send();
+      response = await _on401MaybeRefreshAndRetry(response, send, uri.toString());
+
+      return _handleResponse<T>(response, fromJson as T Function(dynamic p1)?);
     } on SocketException {
       return ApiResponse.error('No internet connection');
     } on HttpException catch (e) {
@@ -497,7 +552,7 @@ class ApiClient {
     try {
       final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
       final uri = Uri.parse(url);
-      final response = await _client
+      Future<http.Response> send() => _client
           .patch(
             uri,
             headers: _getHeaders(headers),
@@ -505,7 +560,10 @@ class ApiClient {
           )
           .timeout(timeout ?? AppConfig.defaultTimeout);
 
-      return _handleResponse<T>(response, fromJson);
+      var response = await send();
+      response = await _on401MaybeRefreshAndRetry(response, send, uri.toString());
+
+      return _handleResponse<T>(response, fromJson as T Function(dynamic p1)?);
     } on SocketException {
       return ApiResponse.error('No internet connection');
     } on HttpException catch (e) {
@@ -528,11 +586,14 @@ class ApiClient {
     try {
       final url = _buildUrl(endpoint, baseUrlOverride: baseUrlOverride);
       final uri = Uri.parse(url);
-      final response = await _client
+      Future<http.Response> send() => _client
           .delete(uri, headers: _getHeaders(headers))
           .timeout(timeout ?? AppConfig.defaultTimeout);
 
-      return _handleResponse<T>(response, fromJson);
+      var response = await send();
+      response = await _on401MaybeRefreshAndRetry(response, send, uri.toString());
+
+      return _handleResponse<T>(response, fromJson as T Function(dynamic p1)?);
     } on SocketException {
       return ApiResponse.error('No internet connection');
     } on HttpException catch (e) {

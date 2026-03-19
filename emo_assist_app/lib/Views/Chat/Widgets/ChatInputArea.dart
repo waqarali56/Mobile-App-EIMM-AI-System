@@ -600,7 +600,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
   void _startVoiceRecording() {
     Get.snackbar(
       'Voice Recording',
-      'Premium feature - Coming soon!',
+      'Feature coming soon!',
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: Constants.primaryColor,
       colorText: Colors.white,
@@ -772,19 +772,19 @@ class _ChatInputAreaState extends State<ChatInputArea> {
 
   void _showPremiumPrompt() {
     Get.snackbar(
-      'Premium Feature',
-      'Upgrade to premium for voice input!',
+      'Feature Notice',
+      'Voice input feature is coming soon!',
       snackPosition: SnackPosition.BOTTOM,
       mainButton: TextButton(
         onPressed: _showPremiumUpgrade,
-        child: const Text('UPGRADE', style: TextStyle(color: Colors.white)),
+        child: const Text('OK', style: TextStyle(color: Colors.white)),
       ),
     );
   }
 
   void _showPremiumUpgrade() {
     Get.defaultDialog(
-      title: 'Upgrade to Premium',
+      title: 'Feature Access',
       titleStyle: TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.bold,
@@ -796,7 +796,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
         fontSize: 14,
         color: Constants.textColor,
       ),
-      textConfirm: 'Upgrade Now',
+      textConfirm: 'Continue',
       textCancel: 'Maybe Later',
       confirmTextColor: Colors.white,
       cancelTextColor: Constants.textColor,

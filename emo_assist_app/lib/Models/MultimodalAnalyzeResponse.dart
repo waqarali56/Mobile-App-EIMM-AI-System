@@ -1,15 +1,18 @@
 /// Response model for POST /analyze (multimodal: text, audio, image, video)
 class MultimodalAnalyzeResponse {
+  final String? sessionId;
   final FusionResult fusionResult;
   final AnalyzeBreakdown? breakdown;
 
   MultimodalAnalyzeResponse({
+    this.sessionId,
     required this.fusionResult,
     this.breakdown,
   });
 
   factory MultimodalAnalyzeResponse.fromJson(Map<String, dynamic> json) {
     return MultimodalAnalyzeResponse(
+      sessionId: json['session_id'] as String?,
       fusionResult: FusionResult.fromJson(
         json['fusion_result'] as Map<String, dynamic>,
       ),

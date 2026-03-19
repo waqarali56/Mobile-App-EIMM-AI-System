@@ -13,36 +13,55 @@ import 'package:emo_assist_app/Views/Chat/Widgets/MultiModalOptionsPanel.dart';
 import 'package:emo_assist_app/Views/CommonWidgets/DrawerWidget.dart';
 import 'package:emo_assist_app/Views/Chat/Widgets/TypingIndicator.dart';
 
-class ChatScreen extends StatelessWidget {
-  ChatScreen({super.key});
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
 
-  final ChatViewModel viewModel = Get.find<ChatViewModel>();
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  late final ChatViewModel viewModel;
+  late final ScrollController _scrollController;
+  late final GlobalKey<ScaffoldState> _scaffoldKey;
+
+  @override
+  void initState() {
+    super.initState();
+    viewModel = Get.find<ChatViewModel>();
+    _scrollController = ScrollController();
+    _scaffoldKey = GlobalKey<ScaffoldState>();
+    final args = Get.arguments;
+    if (args is Map && args['sessionId'] != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        viewModel.loadSessionAndOpen(args['sessionId'] as String);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Constants.backgroundColor,
-      appBar: AppBarWidget(scaffoldKey: _scaffoldKey), // ADD THIS LINE
+      appBar: AppBarWidget(scaffoldKey: _scaffoldKey),
       drawer: DrawerWidget(scaffoldKey: _scaffoldKey),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Column(
               children: [
-                // Multi-modal options panel
                 MultiModalOptionsPanel(viewModel: viewModel),
-
-                // Chat messages area - takes available space
                 Expanded(child: _buildChatContent(constraints.maxHeight)),
-
-                // Typing indicator
                 TypingIndicator(viewModel: viewModel),
-
                 Container(
-                  margin: const EdgeInsets.only(top: 4), // Add small margin
+                  margin: const EdgeInsets.only(top: 4),
                   child: ChatInputArea(
                     viewModel: viewModel,
                     scrollController: _scrollController,
@@ -56,36 +75,36 @@ class ChatScreen extends StatelessWidget {
     );
   }
 
-  // Chat content (messages or empty state)
   Widget _buildChatContent(double maxHeight) {
     return Obx(() {
-      if (viewModel.messages.isEmpty) {
+      if (viewModel.messages.isEmpty && !viewModel.isLoading.value) {
         return EmptyChatState(maxHeight: maxHeight, viewModel: viewModel);
+      }
+      if (viewModel.isLoading.value && viewModel.messages.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
       }
       return _buildChatMessages();
     });
   }
 
-  // Chat messages list
-  // In lib/Views/Chat/ChatScreen.dart - Update _buildChatMessages method
-Widget _buildChatMessages() {
-  return Obx(() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+  Widget _buildChatMessages() {
+    return Obx(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
 
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      itemCount: viewModel.messages.length,
-      itemBuilder: (context, index) {
-        final message = viewModel.messages[index];
+      return ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        itemCount: viewModel.messages.length,
+        itemBuilder: (context, index) {
+          final message = viewModel.messages[index];
         final isUser = message.startsWith('You:');
         final messageText = isUser ? message.substring(4) : message.substring(10);
         
@@ -130,5 +149,5 @@ Widget _buildChatMessages() {
       },
     );
   });
-}
+  }
 }

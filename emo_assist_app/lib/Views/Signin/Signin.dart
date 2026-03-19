@@ -1,10 +1,8 @@
 // lib/Views/Signin/SigninScreen.dart
-import 'package:emo_assist_app/Services/navigation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
 import 'package:emo_assist_app/ViewModels/Auth/AuthViewModel.dart';
-import 'package:emo_assist_app/Services/storage_service.dart'; // Verify this path
 
 class SigninScreen extends StatelessWidget {
   SigninScreen({super.key});
@@ -211,47 +209,6 @@ class SigninScreen extends StatelessWidget {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
-
-                    // Divider
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Guest Login
-                    SizedBox(
-                      width: double.infinity,
-                      height: 45,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: Constants.primaryColor),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        onPressed: () => guestLogin(),
-                        child: Text(
-                          'Continue as Guest',
-                          style: TextStyle(
-                            color: Constants.primaryColor,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-
                     const SizedBox(height: 30),
 
                     // Sign Up Link
@@ -286,17 +243,4 @@ class SigninScreen extends StatelessWidget {
     );
   }
 
-  Future<void> guestLogin() async {
-    try {
-      final storageService = StorageService();
-      await storageService.setGuest(true);
-      NavigationService.goToHome();
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Could not login as guest: $e',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
-  }
 }

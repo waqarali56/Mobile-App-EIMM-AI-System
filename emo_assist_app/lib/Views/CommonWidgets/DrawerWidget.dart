@@ -147,7 +147,7 @@ class DrawerWidget extends StatelessWidget {
                 ),
                 Obx(() {
                   return Text(
-                    viewModel.isGuestMode.value ? 'Guest Mode' : 'Premium User',
+                    viewModel.isGuestMode.value ? 'Guest Mode' : '',
                     style: TextStyle(
                       fontSize: 12,
                       color: Constants.textColor.withOpacity(0.7),
@@ -235,7 +235,7 @@ class DrawerWidget extends StatelessWidget {
                 ),
                 Obx(() {
                   return Text(
-                    viewModel.isGuestMode.value ? 'Guest User' : 'Premium User',
+                    viewModel.isGuestMode.value ? 'Guest User' : '',
                     style: TextStyle(
                       fontSize: 12,
                       color: Constants.textColor.withOpacity(0.7),

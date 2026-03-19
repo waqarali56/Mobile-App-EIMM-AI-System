@@ -11,7 +11,8 @@ class AppConfig {
   static String get baseUrl {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 'http://182.180.159.89:5104';
+         return 'http://182.180.159.89:5104';
+       // return 'http://192.168.100.4:5104';
       case Environment.production:
         return 'https://your-production-domain/api/v1';
     }

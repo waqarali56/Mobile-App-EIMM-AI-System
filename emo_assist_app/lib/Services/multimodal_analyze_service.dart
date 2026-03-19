@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:emo_assist_app/Models/MultimodalAnalyzeResponse.dart';
 import 'package:emo_assist_app/Resources/api_client.dart';
 import 'package:emo_assist_app/Services/AudioConverterService.dart';
+import 'package:emo_assist_app/ViewModels/Auth/AuthViewModel.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 
@@ -13,11 +15,13 @@ class MultimodalAnalyzeService {
   final AudioConverterService _audioConverter = AudioConverterService();
 
   /// Analyze multimodal input (text and/or audio, image, video). Only calls POST /analyze.
+  /// [sessionId]: empty/null = new chat; non-empty = continue existing session.
   Future<ApiResponse<MultimodalAnalyzeResponse>> analyze({
     String text = '',
     File? audio,
     File? image,
     File? video,
+    String? sessionId,
   }) async {
     final hasText = text.trim().isNotEmpty;
     final hasAudio = audio != null;
@@ -28,9 +32,14 @@ class MultimodalAnalyzeService {
       return ApiResponse.error('Provide at least one of: text, audio, image, or video.');
     }
 
+    if (Get.isRegistered<AuthViewModel>()) {
+      await Get.find<AuthViewModel>().ensureFreshAccessTokenForProtectedApis();
+    }
+
     try {
       final fields = <String, String>{
         'text': hasText ? text.trim() : '',
+        'session_id': sessionId?.trim().isNotEmpty == true ? sessionId!.trim() : '',
       };
 
       File? processedAudio = audio;

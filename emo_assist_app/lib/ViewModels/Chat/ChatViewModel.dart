@@ -7,6 +7,7 @@ import 'package:emo_assist_app/Models/MultimodalAnalyzeResponse.dart';
 import 'package:emo_assist_app/Services/AudioVideoService.dart';
 import 'package:emo_assist_app/Services/multimodal_analyze_service.dart';
 import 'package:emo_assist_app/Services/navigation_service.dart';
+import 'package:emo_assist_app/Services/sessions_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,13 +54,16 @@ class ChatViewModel extends GetxController {
 
   // Conversation management
   final RxString currentConversationId = ''.obs;
+  /// Server session ID: empty = new chat, non-empty = continue session (sent to POST /analyze).
+  final RxString currentSessionId = ''.obs;
   final RxList<Map<String, dynamic>> conversations =
       <Map<String, dynamic>>[].obs;
   final RxBool showMultiModalOptions = false.obs;
 
-  // Services (single API: POST /analyze only)
+  // Services
   final ImageService _imageService = ImageService();
   final MultimodalAnalyzeService _multimodalService = MultimodalAnalyzeService();
+  final SessionsService _sessionsService = SessionsService();
 
   // For showing/hiding upload notification
   final RxString uploadStatus = ''.obs;
@@ -109,12 +113,16 @@ class ChatViewModel extends GetxController {
         audio: selectedAudio.value,
         image: selectedImage.value,
         video: selectedVideo.value,
+        sessionId: currentSessionId.value.isEmpty ? null : currentSessionId.value,
       );
 
       uploadProgress.value = 1.0;
 
       if (result.success && result.data != null) {
         final data = result.data!;
+        if (data.sessionId != null && data.sessionId!.isNotEmpty) {
+          currentSessionId.value = data.sessionId!;
+        }
         _updateEmotionScoresFromFusion(data.fusionResult);
 
         final emotion = data.fusionResult.finalFusedEmotion;
@@ -732,24 +740,18 @@ class ChatViewModel extends GetxController {
 
   // Start a new conversation
   void startNewConversation() {
-    // Save current conversation if it has messages
     if (messages.length > 1) {
-      // More than just welcome message
       _saveCurrentConversation();
     }
 
-    // Clear current conversation
     messages.clear();
     selectedFiles.clear();
     clearSelectedImage();
+    currentSessionId.value = '';
 
-    // Generate new conversation ID
     currentConversationId.value = _generateConversationId();
-
-    // Add welcome message
     _addWelcomeMessage();
 
-    // Add to conversations list
     conversations.insert(0, {
       'id': currentConversationId.value,
       'title': _generateConversationTitle(),
@@ -757,6 +759,42 @@ class ChatViewModel extends GetxController {
       'preview': 'New conversation started',
       'messageCount': 1,
     });
+  }
+
+  /// Load session messages from API and open that session (used when opening from Chat History).
+  Future<void> loadSessionAndOpen(String sessionId) async {
+    if (sessionId.trim().isEmpty) return;
+    isLoading.value = true;
+    try {
+      final response = await _sessionsService.getSessionMessages(sessionId);
+      if (response.success && response.data != null) {
+        messages.clear();
+        for (final m in response.data!) {
+          if (m.isUser) {
+            messages.add('You: ${m.content}');
+          } else {
+            messages.add('EmoAssist: ${m.content}');
+          }
+        }
+        currentSessionId.value = sessionId;
+      } else {
+        Get.snackbar(
+          'Could not load chat',
+          response.message ?? 'Please try again.',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        e.toString(),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   // Generate conversation ID
@@ -921,6 +959,9 @@ class ChatViewModel extends GetxController {
 
   Future<void> _checkUserStatus() async {
     isLoading.value = true;
+    if (Get.isRegistered<AuthViewModel>()) {
+      await Get.find<AuthViewModel>().applyStoredTokensToApiClientIfMissing();
+    }
     final prefs = await SharedPreferences.getInstance();
     isGuestMode.value = prefs.getBool('is_guest') ?? false;
     isPremiumUser.value = prefs.getBool('is_premium') ?? false;

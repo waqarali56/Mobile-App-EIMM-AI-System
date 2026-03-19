@@ -32,8 +32,6 @@ class HomeScreen extends StatelessWidget {
                     _buildQuickActions(),
                     const SizedBox(height: 30),
                     _buildFeaturesSection(),
-                    const SizedBox(height: 30),
-                    _buildRecentChats(),
                   ],
                 ),
               ),
@@ -257,13 +255,13 @@ class HomeScreen extends StatelessWidget {
             _buildFeatureCard(
               icon: Icons.mic,
               title: 'Voice Tone',
-              subtitle: 'Premium feature',
+              subtitle: 'Feature coming soon',
               isPremium: true,
             ),
             _buildFeatureCard(
               icon: Icons.face,
               title: 'Facial Emotion',
-              subtitle: 'Premium feature',
+              subtitle: 'Feature coming soon',
               isPremium: true,
             ),
             _buildFeatureCard(
@@ -326,7 +324,7 @@ class HomeScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'PREMIUM',
+                    'SOON',
                     style: TextStyle(
                       fontSize: 8,
                       fontWeight: FontWeight.bold,
@@ -352,140 +350,6 @@ class HomeScreen extends StatelessWidget {
               fontSize: 12,
               color: Constants.textColor.withOpacity(0.6),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecentChats() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Recent Conversations',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Constants.textColor,
-              ),
-            ),
-            TextButton(
-              onPressed: () => NavigationService.goToChatHistory(),
-              child: const Text(
-                'View All',
-                style: TextStyle(fontSize: 14, color: Constants.primaryColor),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildRecentChatItem(
-          title: 'Feeling anxious today',
-          time: 'Today, 10:30 AM',
-          emotion: 'Anxious',
-        ),
-        _buildRecentChatItem(
-          title: 'Need motivation for work',
-          time: 'Today, 09:15 AM',
-          emotion: 'Motivated',
-        ),
-        _buildRecentChatItem(
-          title: 'Relationship advice',
-          time: 'Yesterday, 08:45 PM',
-          emotion: 'Reflective',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentChatItem({
-    required String title,
-    required String time,
-    required String emotion,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Constants.cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Constants.dividerColor),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Constants.primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Icon(
-              Icons.psychology,
-              color: Constants.primaryColor,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Constants.textColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      time,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Constants.textColor.withOpacity(0.6),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Constants.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        emotion,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Constants.primaryColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.arrow_forward_ios,
-              color: Constants.textColor.withOpacity(0.4),
-              size: 16,
-            ),
-            onPressed: () => NavigationService.goToChat(),
           ),
         ],
       ),

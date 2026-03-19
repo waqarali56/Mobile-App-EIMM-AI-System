@@ -1,5 +1,6 @@
 import 'package:emo_assist_app/Models/OTP.dart';
 import 'package:emo_assist_app/Resources/RouteNames.dart';
+import 'package:emo_assist_app/ViewModels/Auth/ProfileViewModel.dart';
 import 'package:emo_assist_app/Views/Chat/ChatHistoryScreen.dart';
 import 'package:emo_assist_app/Views/ForgotPassword/ForgotPasswordScreen.dart';
 import 'package:emo_assist_app/Views/ForgotPassword/ResetPasswordScreen.dart';
@@ -104,7 +105,7 @@ class AppRoutes {
     ),
     GetPage(
       name: RouteNames.chat,
-      page: () => ChatScreen(),
+      page: () => const ChatScreen(),
       transition: Transition.fade,
     ),
 
@@ -114,6 +115,12 @@ class AppRoutes {
     GetPage(name: RouteNames.settings, page: () => SettingsScreen()),
     GetPage(name: RouteNames.privacyPolicy, page: () => PrivacyPolicyScreen()),
     GetPage(name: RouteNames.terms, page: () => TermsScreen()),
-    GetPage(name: RouteNames.profile, page: () => ProfileScreen()),
+    GetPage(
+      name: RouteNames.profile,
+      page: () => ProfileScreen(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut<ProfileViewModel>(() => ProfileViewModel(), fenix: true);
+      }),
+    ),
   ];
 }

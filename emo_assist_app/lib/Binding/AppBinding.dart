@@ -12,6 +12,7 @@ import 'package:emo_assist_app/ViewModels/Auth/ForgotPasswordViewModel.dart';
 import 'package:emo_assist_app/ViewModels/OnBoardingViewModel.dart';
 import 'package:emo_assist_app/ViewModels/Auth/ResetPasswordViewModel.dart';
 import 'package:emo_assist_app/ViewModels/Chat/ChatViewModel.dart';
+import 'package:emo_assist_app/ViewModels/Chat/ChatHistoryViewModel.dart';
 import 'package:emo_assist_app/ViewModels/Auth/OTPViewModel.dart';
 
 class AppBinding extends Bindings {
@@ -33,6 +34,7 @@ class AppBinding extends Bindings {
     Get.lazyPut(() => SplashViewModel(), fenix: true);
     Get.lazyPut(() => OnBoardingViewModel(), fenix: true);
     Get.lazyPut(() => ChatViewModel(), fenix: true);
+    Get.lazyPut(() => ChatHistoryViewModel(), fenix: true);
     Get.lazyPut(() => ProfileViewModel(), fenix: true);
   }
 }

@@ -36,6 +36,10 @@ abstract class BaseApiService extends GetxService {
     _apiClient.setAuthToken(token);
   }
 
+  void setRefreshToken(String token) {
+    _apiClient.setRefreshToken(token);
+  }
+
   /// Clear authentication token
   void clearAuthToken() {
     _apiClient.clearAuthTokens();

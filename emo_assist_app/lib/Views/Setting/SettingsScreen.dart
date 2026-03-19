@@ -40,11 +40,7 @@ class SettingsScreen extends StatelessWidget {
         children: [
           // Account Section
           _buildSectionTitle('Account'),
-          _buildSettingItem(
-            icon: Icons.person,
-            title: 'Edit Profile',
-            onTap: () => NavigationService.goToProfile(),
-          ),
+
           _buildSettingItem(
             icon: Icons.security,
             title: 'Privacy & Security',
@@ -60,14 +56,7 @@ class SettingsScreen extends StatelessWidget {
           // App Preferences
           const SizedBox(height: 24),
           _buildSectionTitle('App Preferences'),
-          Obx(
-            () => _buildSwitchSetting(
-              icon: Icons.notifications,
-              title: 'Notifications',
-              value: notifications.value,
-              onChanged: (val) => notifications.value = val,
-            ),
-          ),
+
           Obx(
             () => _buildSwitchSetting(
               icon: Icons.dark_mode,
@@ -236,9 +225,6 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _buildLanguageOption('English', true),
-            _buildLanguageOption('Spanish', false),
-            _buildLanguageOption('French', false),
-            _buildLanguageOption('German', false),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => Get.back(),
@@ -246,7 +232,13 @@ class SettingsScreen extends StatelessWidget {
                 backgroundColor: Constants.primaryColor,
                 minimumSize: const Size(double.infinity, 50),
               ),
-              child: const Text('Apply'),
+              child: const Text(
+                'Apply',
+                style: const TextStyle(
+                  color: Colors.white, // 👈 Add this line
+                  // other styles...
+                ),
+              ),
             ),
           ],
         ),

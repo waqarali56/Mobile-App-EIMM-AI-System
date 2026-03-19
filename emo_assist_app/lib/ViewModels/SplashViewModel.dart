@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:emo_assist_app/Services/navigation_service.dart';
 import 'package:emo_assist_app/Enums/AppEnums.dart';
+import 'package:emo_assist_app/ViewModels/Auth/AuthViewModel.dart';
 
 class SplashViewModel extends GetxController {
   final Rx<AppStatus> status = AppStatus.loading.obs;
@@ -39,11 +40,15 @@ class SplashViewModel extends GetxController {
       // Step 4: Check user authentication status
       loadingMessage.value = 'Checking authentication...';
       await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Check if user is logged in
-      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
-      final isGuest = prefs.getBool('is_guest') ?? false;
-      final authToken = prefs.getString('auth_token');
+
+      // Load tokens into ApiClient + refresh if JWT expired (Splash used to skip this).
+      loadingMessage.value = 'Restoring session...';
+      await Get.find<AuthViewModel>().restoreSessionFromStorage();
+
+      final prefsAuth = await SharedPreferences.getInstance();
+      final isLoggedIn = prefsAuth.getBool('is_logged_in') ?? false;
+      final isGuest = prefsAuth.getBool('is_guest') ?? false;
+      final authToken = prefsAuth.getString('auth_token');
       
       // Step 5: Navigate based on authentication status
       if (isLoggedIn || isGuest || authToken != null) {

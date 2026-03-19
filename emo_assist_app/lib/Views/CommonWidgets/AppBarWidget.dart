@@ -3,6 +3,7 @@ import 'package:emo_assist_app/ViewModels/Chat/ChatViewModel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:emo_assist_app/Resources/Constants.dart';
+import 'package:emo_assist_app/Services/navigation_service.dart';
 
 class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;
@@ -73,7 +74,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
         ),
         Obx(() {
           return Text(
-            viewModel.isGuestMode.value ? 'Guest Mode' : 'Premium User',
+            viewModel.isGuestMode.value ? 'Guest Mode' : '',
             style: TextStyle(
               fontSize: 11,
               color: Colors.white.withOpacity(0.8),
@@ -110,13 +111,14 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
       );
     }
 
-    // Profile button - always show
+    // Profile button - always show (use NavigationService so profile opens correctly)
     actions.add(
       Container(
         margin: EdgeInsets.only(right: _isChatScreen ? 8 : 12),
         child: InkWell(
           onTap: () {
-            Get.toNamed('/profile');
+            scaffoldKey.currentState?.closeDrawer();
+            NavigationService.goToProfile();
           },
           borderRadius: BorderRadius.circular(20),
           child: Obx(() {
